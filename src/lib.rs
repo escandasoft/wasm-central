@@ -70,7 +70,10 @@ pub struct DataFrame {
 pub mod runner {
 
 use std::io::Read;
-use wasmer::{Store, Module, Instance, Value, imports, Universal, Cranelift, UniversalEngine, Engine};
+    use std::ops::Deref;
+    use std::sync::Arc;
+    use fork::Fork;
+    use wasmer::{Store, Module, Instance, Value, imports, Universal, Cranelift, UniversalEngine, Engine};
     use crate::data::DataFrame;
 
     #[derive(Clone)]
@@ -79,16 +82,16 @@ pub struct CompilationUnit {
 }
 
 pub struct Compiler {
-    engine: UniversalEngine,
+    pub engine: Arc<UniversalEngine>,
     store: Store,
 }
 
 impl Compiler {
     pub fn new() -> Compiler {
         let comp_config = Cranelift::default();
-        let engine = Universal::new(comp_config)
-            .engine();
-        let store = Store::new(&engine);
+        let engine = Arc::new(Universal::new(comp_config)
+            .engine());
+        let store = Store::new(engine.deref());
         Compiler {
             engine,
             store
@@ -104,11 +107,35 @@ impl Compiler {
 }
 
 pub struct Executor {
+    pub engine: Arc<UniversalEngine>
 }
 
 impl Executor {
-    pub fn execute(&self, compilation_unit: CompilationUnit, frame: &DataFrame) -> DataFrame {
-        DataFrame{}
+    pub fn new(&self, engine: Arc<UniversalEngine>) -> Executor {
+        Executor {
+            engine
+        }
+    }
+
+    pub fn execute(&self, compilation_unit: CompilationUnit, frame: &DataFrame) -> Result<DataFrame, String> {
+        match fork::fork() {
+            Ok(Fork::Child) => {
+                let imports = imports! {};
+                let instance_result = Instance::new(&compilation_unit.module, &imports);
+                if instance_result.is_ok() {
+                    let instance = instance_result.unwrap();
+                    let function_result = instance.exports.get_function("main");
+                    function_result.unwrap().call(&[]);
+                }
+            },
+            Ok(Fork::Parent(child)) => {
+
+            },
+            Err(_) => {
+                println!()
+            }
+        }
+        Ok(DataFrame {})
     }
 }
 
@@ -125,10 +152,12 @@ use sha2::{Sha256, Digest};
 use sha2::digest::generic_array::{GenericArray, ArrayLength};
 use std::fs;
 use std::sync::Mutex;
+    use std::time::SystemTime;
     use zip::read::ZipFile;
-    use zip::ZipArchive;
-    use crate::modules::ModuleStatus::{DEPLOY, DEPLOYED, UNDEPLOY, UNDEPLOYED};
-    use crate::runner::CompilationUnit;
+use zip::ZipArchive;
+use crate::modules::ModuleStatus::{DEPLOY, DEPLOYED, UNDEPLOY, UNDEPLOYED};
+use crate::runner::CompilationUnit;
+use strum_macros::AsRefStr;
 
     fn get_file_checksum(p: &PathBuf) -> String {
     let mut file = fs::File::open(&p)
@@ -148,7 +177,7 @@ pub struct ModuleManager {
     path: PathBuf,
     watcher: crate::watcher::DirectoryWatcher,
     module_map: HashMap<String, DeployedItem>,
-    compiler: crate::runner::Compiler,
+    pub compiler: crate::runner::Compiler,
 }
 
 impl ModuleManager {
@@ -186,18 +215,26 @@ impl ModuleManager {
                 self.module_map.insert(module_name.to_string(), item);
             }
             println!("Starting to load module {}", module_name.clone());
+            let t_now = SystemTime::now();
             self.load(&module_name, &file_entry.path, &next_status);
+            println!("Loaded module {} in {}ms", module_name.clone(), t_now.elapsed().unwrap().as_millis());
         }
     }
 
-    pub fn get_handle(&self, module_name: String) -> Option<ModuleHandle> {
-        let module_opt = self.module_map.get(&module_name);
-        if module_opt.is_some() && module_opt.unwrap().status.eq(&DEPLOYED) {
-            Some(ModuleHandle {
-                name: module_name
-            })
-        } else {
+    pub fn get_handle(&self, module_name: &String) -> Option<ModuleHandle> {
+        let module_opt = self.module_map.get(module_name);
+        if module_opt.is_none() {
             None
+        } else {
+            let module_status = module_opt.unwrap().status;
+            println!("!! found module?: {}, status: {}", module_opt.is_some(), module_status.as_ref());
+            if module_opt.is_some() && module_status.eq(&DEPLOYED) {
+                Some(ModuleHandle {
+                    name: module_name.clone()
+                })
+            } else {
+                None
+            }
         }
     }
 
@@ -214,6 +251,8 @@ impl ModuleManager {
                 let deploy_result = self.deploy(&module_name);
                 if deploy_result.is_err() {
                     println!("Couldn't deploy {} because: {}", module_name, deploy_result.err().unwrap());
+                } else {
+                    println!("Correctly deployed {}", module_name);
                 }
             },
             UNDEPLOY => {
@@ -268,7 +307,7 @@ impl ModuleManager {
         self.module_map.insert(module_name.clone(), DeployedItem {
             checksum: module.checksum.clone(),
             name: module_name.clone(),
-            status: module.status,
+            status: DEPLOYED,
             file_path: module.file_path.clone(),
             compilation: Some(compilation_unit_result.unwrap()),
         }).unwrap();
@@ -302,7 +341,7 @@ fn open_zip(path: PathBuf) -> Result<ZipArchive<impl Read + Seek>, String> {
     Ok(archive.unwrap())
 }
 
-#[derive(Debug,PartialEq,Clone,Copy)]
+#[derive(AsRefStr,PartialEq,Clone,Copy)]
 pub enum ModuleStatus {
     DEPLOY, DEPLOYED, UNDEPLOY, UNDEPLOYED
 }
@@ -333,6 +372,8 @@ mod tests {
     use super::*;
 
     use std::io::Write;
+    use std::ops::Deref;
+    use crate::runner::Executor;
 
     #[test]
     fn check_file_handling() {
@@ -354,6 +395,13 @@ mod tests {
 
         module_manager.tick();
         assert_eq!(1, module_manager.module_map.len());
+
+        let module_name = "module".to_string();
+        let module_handle = module_manager.get_handle(&module_name);
+        assert_eq!(true, module_handle.is_some());
+        Executor {
+            engine: module_manager.compiler.engine
+        };
     }
 }
 
