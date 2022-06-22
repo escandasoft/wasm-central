@@ -349,11 +349,11 @@ pub enum ModuleStatus {
 impl ModuleStatus {
     fn from_string(str: &String) -> ModuleStatus {
         match str.as_str() {
-            "deploy" => ModuleStatus::DEPLOY,
-            "undeploy" => ModuleStatus::UNDEPLOY,
-            "running" => ModuleStatus::DEPLOYED,
-            "undeployed" => ModuleStatus::UNDEPLOYED,
-            _ => ModuleStatus::UNDEPLOYED
+            "deploy" => DEPLOY,
+            "undeploy" => UNDEPLOY,
+            "running" => DEPLOYED,
+            "undeployed" => UNDEPLOYED,
+            _ => UNDEPLOYED
         }
     }
 }
