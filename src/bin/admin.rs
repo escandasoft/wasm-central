@@ -31,6 +31,7 @@ enum ModuleCommands {
         #[clap(short, long)]
         base: std::path::PathBuf,
 
+        #[clap(short, long)]
         entry_file: std::path::PathBuf
     }
 }

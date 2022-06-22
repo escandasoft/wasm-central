@@ -8,7 +8,7 @@ use console::Style;
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
 
-use wasm_central::watcher::Watcher;
+use wasm_central::watcher::DirectoryWatcher;
 
 #[derive(Parser)]
 struct Cli {
@@ -21,38 +21,6 @@ struct Cli {
 
 pub mod datatx_proto {
     tonic::include_proto!("datatx_proto");
-}
-
-pub struct ModuleManager {
-    path: std::path::PathBuf,
-    watcher_thread: Option<std::thread::JoinHandle<()>>,
-    watcher: Watcher,
-    is_running: AtomicBool,
-}
-
-impl ModuleManager {
-    pub fn on_deployable_item(&self, p: &std::path::Path, next_status: &String) -> () {
-        
-    }
-
-    pub fn start(&self) -> () {
-        self.watcher_thread = Some(std::thread::spawn(move || {
-            if self.is_running.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).unwrap() {
-                while self.is_running.fetch_and(true, Ordering::SeqCst) {
-                    let callback = |p: &std::path::Path, next_status: &String| { self.on_deployable_item(p, next_status) };
-                    self.watcher.run(callback);
-                    std::thread::yield_now();
-                    std::thread::sleep_ms(1000);
-                }
-            }
-        }));
-    }
-
-    pub fn stop(&self) {
-        if self.is_running.compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst).expect("cannot use stop flag") {
-            self.watcher_thread.unwrap().join();
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -69,6 +37,17 @@ pub struct MyModules {
     mutex: std::sync::Mutex<u8>,
     loaded_modules: Vec<LoadedModule>,
     is_running: AtomicBool
+}
+
+impl MyModules {
+    fn new(path: std::path::PathBuf) -> MyModules {
+        MyModules {
+            hot_folder_path: path,
+            is_running: AtomicBool::new(false),
+            loaded_modules: vec!(),
+            mutex: std::sync::Mutex::new(0)
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -133,13 +112,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let watcher = Watcher::new(&path);
-    let service = MyModules {
-        hot_folder_path: path.clone(),
-        is_running: AtomicBool::new(false),
-        loaded_modules: vec!(),
-        mutex: std::sync::Mutex::new(0)
-    };
+    let watcher = DirectoryWatcher::new(path.clone());
+    let service = MyModules::new(path.clone());
 
     let bootstrap_future = Server::builder()
         .add_service(ModulesServer::new(service))

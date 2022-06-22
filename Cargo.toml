@@ -12,6 +12,9 @@ tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 clap = { version = "3.0", features = ["derive"] }
 console = "0.15.0"
 glob = "0.3.0"
+zip = "0.6.2"
+sha2 = "0.10.2"
+wasmer = "2.3.0"
 
 [build-dependencies]
 tonic-build = "0.7"
