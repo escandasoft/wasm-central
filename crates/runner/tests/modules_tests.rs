@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
-fn test_file_handling() {
+fn test_file_handling() -> Result<(), std::io::Error> {
     let path = PathBuf::from("./");
 
     let full_path = path.join("./module.zip");
@@ -37,4 +37,5 @@ fn test_file_handling() {
     fs::copy(full_path.clone(), module_path.clone())
         .expect("Cannot copy module.zip into ./target/runtime/");
     module_manager.tick();
+    Ok(())
 }

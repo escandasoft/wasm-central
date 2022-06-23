@@ -1,6 +1,6 @@
+use crate::data::DataFrame;
 use crate::runner::{CompilationUnit, Compiler, Executor};
 use crate::watcher::DirectoryWatcher;
-use crate::data::DataFrame;
 
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -9,6 +9,7 @@ use std::io::{Read, Seek};
 use std::path::PathBuf;
 use std::time::SystemTime;
 use strum_macros::AsRefStr;
+use thiserror::Error;
 use zip::ZipArchive;
 
 fn get_file_checksum(p: &PathBuf) -> String {
@@ -25,7 +26,7 @@ pub struct Module {
     pub name: String,
     pub status: ModuleStatus,
     pub file_path: PathBuf,
-    compilation: Option<CompilationUnit>
+    compilation: Option<CompilationUnit>,
 }
 
 pub struct ModuleHandle<'a> {
@@ -36,15 +37,26 @@ pub struct ModuleHandle<'a> {
 
 impl<'a> ModuleHandle<'a> {
     pub fn run(&self, frame: &DataFrame) -> Result<DataFrame, String> {
-        self.backreference.executor.execute(&self.compilation_unit, frame)
+        self.backreference
+            .executor
+            .execute(&self.compilation_unit, frame)
     }
+}
+
+#[derive(Error, Debug)]
+pub enum ModuleManagerError {
+    #[error("Unavailable module {0:?}")]
+    UnavailableModule(String),
+
+    #[error("Error while compiling {0:?} because {1:?}")]
+    CompilationError(String, String),
 }
 
 pub struct ModuleManager {
     watcher: DirectoryWatcher,
     module_map: HashMap<String, Module>,
-    compiler: Compiler,
-    executor: Executor,
+    pub compiler: Compiler,
+    pub executor: Executor,
 }
 
 impl ModuleManager {
@@ -129,7 +141,7 @@ impl ModuleManager {
                 Some(ModuleHandle {
                     name: module_name.clone(),
                     backreference: self,
-                    compilation_unit: cu.clone()
+                    compilation_unit: cu.clone(),
                 })
             } else {
                 None
@@ -163,7 +175,10 @@ impl ModuleManager {
                     println!(
                         "Couldn't deploy {} because: {}",
                         module_name,
-                        deploy_result.err().unwrap()
+                        match deploy_result.err().unwrap() {
+                            ModuleManagerError::UnavailableModule(module_name) => String::from("The module is not available anymore"),
+                            ModuleManagerError::CompilationError(module_name, err_msg) => err_msg
+                        }
                     );
                 } else {
                     println!("Correctly deployed {}", module_name);
@@ -177,14 +192,11 @@ impl ModuleManager {
         );
     }
 
-    fn deploy(&mut self, module_name: &String) -> Result<ModuleStatus, String> {
+    fn deploy(&mut self, module_name: &String) -> Result<ModuleStatus, ModuleManagerError> {
         let module_map = self.running_modules_map();
         let mod_opt = module_map.get(&module_name.clone());
         if mod_opt.is_none() {
-            return Err(format!(
-                "Cannot find module by name {} during deploy",
-                module_name
-            ));
+            return Err(ModuleManagerError::UnavailableModule(module_name.clone()));
         }
         let module = mod_opt.unwrap();
 
@@ -192,19 +204,28 @@ impl ModuleManager {
         let runnable_zip_result = open_zip(module.file_path.clone());
 
         if meta_zip_result.is_err() || runnable_zip_result.is_err() {
-            return Err("Cannot open zip archive".to_string());
+            return Err(ModuleManagerError::CompilationError(
+                module_name.clone(),
+                "cannot open zip archive".to_string(),
+            ));
         }
 
         let mut meta_archive = meta_zip_result.unwrap();
         let meta_file_opt = meta_archive.by_name("meta.json");
         if meta_file_opt.is_err() {
-            return Err("Cannot find meta.json file in zip archive".to_string());
+            return Err(ModuleManagerError::CompilationError(
+                module_name.clone(),
+                "cannot find meta.json file in zip archive".to_string(),
+            ));
         }
 
         let mut runnable_archive = runnable_zip_result.unwrap();
         let runnable_file_opt = runnable_archive.by_name("runnable.wasm");
         if runnable_file_opt.is_err() {
-            return Err("Cannot find runnable.wasm file in zip archive".to_string());
+            return Err(ModuleManagerError::CompilationError(
+                module_name.clone(),
+                "cannot find runnable.wasm file in zip archive".to_string(),
+            ));
         }
 
         let _meta_file = meta_file_opt.unwrap();
@@ -212,30 +233,31 @@ impl ModuleManager {
 
         let compilation_unit_result = self.compiler.compile(&mut runnable_file);
         if compilation_unit_result.is_err() {
-            return Err(format!(
-                "Cannot compile WASM: {}",
-                compilation_unit_result.err().unwrap()
+            return Err(ModuleManagerError::CompilationError(
+                module_name.clone(),
+                format!(
+                    "couldn't JIT compile WASM: {:?}",
+                    compilation_unit_result.err().unwrap()
+                ),
             ));
         }
-        self.change_status(&module_name.clone(), &module,  ModuleStatus::Deploy);
+        self.change_status(&module_name.clone(), &module, ModuleStatus::Deploy);
         Ok(ModuleStatus::Deployed)
     }
 
-    fn undeploy(&mut self, module_name: &String) -> Result<ModuleStatus, String> {
+    fn undeploy(&mut self, module_name: &String) -> Result<ModuleStatus, ModuleManagerError> {
         let mod_opt = self.module_map.get(&module_name.clone());
         if mod_opt.is_none() {
-            return Err(format!(
-                "Cannot find module by name {} during undeploy",
-                module_name
-            ));
+            Err(ModuleManagerError::UnavailableModule(module_name.clone()))
+        } else {
+            let module = mod_opt.unwrap();
+            let module_path = module.file_path.clone();
+            if !module_path.exists() {
+                let _ = fs::remove_file(module_path);
+                self.module_map.remove(module_name).unwrap();
+            }
+            Ok(ModuleStatus::Undeployed)
         }
-        let module = mod_opt.unwrap();
-        let module_path = module.file_path.clone();
-        if !module_path.exists() {
-            fs::remove_file(module_path.clone())?;
-            self.module_map.remove(module_name).unwrap();
-        }
-        Ok(ModuleStatus::Undeployed)
     }
 
     fn change_status(&mut self, module_name: &String, module: &Module, status: ModuleStatus) {

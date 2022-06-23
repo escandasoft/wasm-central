@@ -41,7 +41,7 @@ impl MyModules {
 impl Modules for MyModules {
     async fn list(&self, request: Request<Empty>) -> Result<Response<ModuleListReply>, Status> {
         match self.mutex.lock() {
-            Ok(lock) => {
+            Ok(_lock) => {
                 let items = self
                     .manager
                     .running_modules()
