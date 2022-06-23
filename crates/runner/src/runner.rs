@@ -1,16 +1,11 @@
-#[path = "./data.rs"]
-mod data;
+use crate::data::DataFrame;
 
-use data::DataFrame;
 use fork::Fork;
-use nc::poll;
 use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmer::InstantiationError::{HostEnvInitialization, Link, Start};
-use wasmer::{
-    imports, Cranelift, Engine, Instance, Module, Store, Universal, UniversalEngine, Value,
-};
+use wasmer::{Cranelift, Instance, Module, Store, Universal, UniversalEngine};
 use wasmer_wasi::WasiState;
 
 #[derive(Clone)]
@@ -19,16 +14,21 @@ pub struct CompilationUnit {
 }
 
 pub struct Compiler {
-    engine: Arc<UniversalEngine>,
     store: Store,
 }
 
+pub fn new_pair() -> (Compiler, Executor) {
+    let comp_config = Cranelift::default();
+    let engine_arc = Arc::new(Universal::new(comp_config).engine());
+    let compiler = Compiler::new(engine_arc.clone());
+    let executor = Executor::new(engine_arc.clone());
+    (compiler, executor)
+}
+
 impl Compiler {
-    pub fn new() -> Compiler {
-        let comp_config = Cranelift::default();
-        let engine = Arc::new(Universal::new(comp_config).engine());
+    pub fn new(engine: Arc<UniversalEngine>) -> Compiler {
         let store = Store::new(engine.deref());
-        Compiler { engine, store }
+        Compiler { store }
     }
 
     pub fn compile(&self, reader: &mut impl Read) -> Result<CompilationUnit, String> {
@@ -67,7 +67,7 @@ fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
 }
 
 fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, String> {
-    let mut wasi_env = WasiState::new("runner").finalize();
+    let wasi_env = WasiState::new("runner").finalize();
     let import_object = wasi_env.unwrap().import_object(&compilation_unit.module);
     let instance = Instance::new(&compilation_unit.module, &import_object.unwrap());
     if instance.is_ok() {
@@ -99,8 +99,8 @@ impl Executor {
 
     pub fn execute(
         &self,
-        compilation_unit: CompilationUnit,
-        frame: &DataFrame,
+        compilation_unit: &CompilationUnit,
+        _frame: &DataFrame,
     ) -> Result<DataFrame, String> {
         match fork::fork() {
             Ok(Fork::Child) => {
@@ -114,7 +114,9 @@ impl Executor {
             Ok(Fork::Parent(child)) => unsafe {
                 let pidfd = nc::pidfd_open(child, 0);
                 if pidfd == Err(nc::errno::ENOSYS) {
-                    eprintln!("PIDFD_OPEN syscall not supported in this system: cannot execute runnable");
+                    eprintln!(
+                        "PIDFD_OPEN syscall not supported in this system: cannot execute runnable"
+                    );
                 } else {
                     let mut pollfd = libc::pollfd {
                         events: 0x001,

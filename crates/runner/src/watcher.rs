@@ -9,12 +9,6 @@ pub enum ChangedEntryStatus {
 }
 
 #[derive(Debug)]
-pub struct ChangedEntry {
-    path: PathBuf,
-    status: ChangedEntryStatus,
-}
-
-#[derive(Debug)]
 pub struct WatcherEntry {
     pub path: PathBuf,
     pub next_status: String,

@@ -1,2 +1,1 @@
-pub struct DataFrame {
-}
+pub struct DataFrame {}

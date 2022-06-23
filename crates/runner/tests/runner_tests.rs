@@ -2,7 +2,6 @@ use wasm_central_runner::modules::ModuleManager;
 use wasm_central_runner::runner::{Compiler, Executor};
 
 use std::fs;
-use std::io::Write;
 use std::ops::Deref;
 use std::path::PathBuf;
 
@@ -10,10 +9,10 @@ use std::path::PathBuf;
 fn test_executor_basics() {
     let path = PathBuf::from("./");
 
-    let full_path = path.join("../../../module.zip");
+    let full_path = path.join("./module.zip");
     let rt_path = path.join("target/runtime/");
 
-    fs::remove_dir_all(rt_path.clone()).unwrap();
+    fs::remove_dir_all(rt_path.clone());
     fs::create_dir(rt_path.clone()).unwrap();
 
     let mut module_manager = ModuleManager::new(rt_path.clone());

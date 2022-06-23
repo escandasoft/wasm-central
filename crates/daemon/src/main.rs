@@ -47,11 +47,11 @@ impl Modules for MyModules {
                     .running_modules()
                     .iter()
                     .map(|loaded_module| {
-                        let module_status = match loaded_module.status{
-                            ModuleStatus::deploy => "deploy",
-                            ModuleStatus::deployed => "deployed",
-                            ModuleStatus::undeploy => "undeploy",
-                            ModuleStatus::undeployed => "undeployed",
+                        let module_status = match loaded_module.status {
+                            ModuleStatus::Deploy => "deploy",
+                            ModuleStatus::Deployed => "deployed",
+                            ModuleStatus::Undeploy => "undeploy",
+                            ModuleStatus::Undeployed => "undeployed",
                         };
                         ModuleListReplyItem {
                             name: String::from(&loaded_module.name),

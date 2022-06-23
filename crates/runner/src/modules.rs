@@ -1,64 +1,72 @@
+use crate::runner::{CompilationUnit, Compiler, Executor};
 use crate::watcher::DirectoryWatcher;
-use crate::runner::{Compiler, CompilationUnit};
-use sha2::digest::generic_array::{ArrayLength, GenericArray};
+use crate::data::DataFrame;
+
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Seek};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::Mutex;
 use std::time::SystemTime;
 use strum_macros::AsRefStr;
-use zip::read::ZipFile;
 use zip::ZipArchive;
 
 fn get_file_checksum(p: &PathBuf) -> String {
     let mut file = fs::File::open(&p).expect("Cannot open file to calculate checksum");
     let mut hasher = Sha256::new();
-    std::io::copy(&mut file, &mut hasher)
-        .expect("Cannot copy contents into Digest for checksum");
+    std::io::copy(&mut file, &mut hasher).expect("Cannot copy contents into Digest for checksum");
     let new_checksum_arr = hasher.finalize();
     format!("{:x}", new_checksum_arr)
 }
 
 #[derive(Clone)]
-pub struct LoadedModule {
+pub struct Module {
     checksum: String,
     pub name: String,
     pub status: ModuleStatus,
     pub file_path: PathBuf,
-    compilation: Option<CompilationUnit>,
+    compilation: Option<CompilationUnit>
 }
 
 pub struct ModuleHandle<'a> {
     pub name: String,
+    compilation_unit: CompilationUnit,
     backreference: &'a ModuleManager,
 }
 
+impl<'a> ModuleHandle<'a> {
+    pub fn run(&self, frame: &DataFrame) -> Result<DataFrame, String> {
+        self.backreference.executor.execute(&self.compilation_unit, frame)
+    }
+}
+
 pub struct ModuleManager {
-    path: PathBuf,
     watcher: DirectoryWatcher,
-    module_map: HashMap<String, LoadedModule>,
-    pub compiler: Compiler,
+    module_map: HashMap<String, Module>,
+    compiler: Compiler,
+    executor: Executor,
 }
 
 impl ModuleManager {
     pub fn new(path: PathBuf) -> ModuleManager {
+        let (compiler, executor) = crate::runner::new_pair();
         ModuleManager {
-            path: path.clone(),
             watcher: DirectoryWatcher::new(path.clone()),
             module_map: HashMap::new(),
-            compiler: Compiler::new(),
+            compiler,
+            executor,
         }
     }
 
-    pub fn running_modules(&self) -> Vec<&LoadedModule> {
+    pub fn running_modules_map(&self) -> HashMap<String, Module> {
+        self.module_map.clone()
+    }
+
+    pub fn running_modules(&self) -> Vec<&Module> {
         self.module_map
             .iter()
-            .map(|(name, module)| module)
-            .filter(|module| module.status.eq(&ModuleStatus::deployed))
+            .map(|(_name, module)| module)
+            .filter(|module| module.status.eq(&ModuleStatus::Deployed))
             .collect()
     }
 
@@ -77,10 +85,10 @@ impl ModuleManager {
                     self.load(&module_name, &next_status);
                 }
             } else {
-                let item = LoadedModule {
+                let item = Module {
                     checksum: get_file_checksum(&file_entry.path),
                     name: module_name.clone(),
-                    status: ModuleStatus::undeployed,
+                    status: ModuleStatus::Undeployed,
                     file_path: file_entry.path.clone(),
                     compilation: None,
                 };
@@ -88,9 +96,9 @@ impl ModuleManager {
                 self.load(&module_name, &next_status);
             }
         }
-        let mut to_undeploy = self.get_to_undeploy();
+        let to_undeploy = self.get_to_undeploy();
         for item in to_undeploy {
-            self.undeploy(&item);
+            self.undeploy(&item).unwrap();
         }
     }
 
@@ -115,10 +123,13 @@ impl ModuleManager {
                 module_opt.is_some(),
                 module_status.as_ref()
             );
-            if module_opt.is_some() && module_status.eq(&ModuleStatus::deployed) {
+            if module_opt.is_some() && module_status.eq(&ModuleStatus::Deployed) {
+                let module = module_opt.unwrap();
+                let cu = module.compilation.as_ref().unwrap();
                 Some(ModuleHandle {
                     name: module_name.clone(),
-                    backreference: self
+                    backreference: self,
+                    compilation_unit: cu.clone()
                 })
             } else {
                 None
@@ -129,14 +140,23 @@ impl ModuleManager {
     pub fn load(&mut self, module_name: &String, new_status: &ModuleStatus) {
         println!("Starting to load module {}", module_name.clone());
         let t_now = SystemTime::now();
-        let mut module_opt = self.module_map.get(&module_name.clone());
+        let module_opt = self.module_map.get(&module_name.clone());
         if module_opt.is_none() {
             return;
         }
 
-        let mut module = module_opt.unwrap();
+        let module = module_opt.unwrap();
         match module.status {
-            UNDEPLOYED => {
+            ModuleStatus::Deploy => {
+                if new_status.eq(&ModuleStatus::Undeploy)
+                    || new_status.eq(&ModuleStatus::Undeployed)
+                {
+                    self.undeploy(module_name).unwrap();
+                }
+            }
+            ModuleStatus::Deployed => {}
+            ModuleStatus::Undeploy => {}
+            ModuleStatus::Undeployed => {
                 let module_name = module_name.clone();
                 let deploy_result = self.deploy(&module_name);
                 if deploy_result.is_err() {
@@ -149,14 +169,6 @@ impl ModuleManager {
                     println!("Correctly deployed {}", module_name);
                 }
             }
-            UNDEPLOY => {}
-            DEPLOYED => {
-                if new_status.eq(&ModuleStatus::undeploy) || new_status.eq(&ModuleStatus::undeployed) {
-                    self.undeploy(module_name);
-                }
-            }
-            UNDEPLOYED => if new_status.eq(&ModuleStatus::deploy) || new_status.eq(&ModuleStatus::deployed) {},
-            _ => {}
         }
         println!(
             "Modified module {} in {}ms",
@@ -166,14 +178,15 @@ impl ModuleManager {
     }
 
     fn deploy(&mut self, module_name: &String) -> Result<ModuleStatus, String> {
-        let mod_opt = self.module_map.get(module_name).cloned();
+        let module_map = self.running_modules_map();
+        let mod_opt = module_map.get(&module_name.clone());
         if mod_opt.is_none() {
             return Err(format!(
                 "Cannot find module by name {} during deploy",
                 module_name
             ));
         }
-        let mut module = mod_opt.unwrap();
+        let module = mod_opt.unwrap();
 
         let meta_zip_result = open_zip(module.file_path.clone());
         let runnable_zip_result = open_zip(module.file_path.clone());
@@ -194,7 +207,7 @@ impl ModuleManager {
             return Err("Cannot find runnable.wasm file in zip archive".to_string());
         }
 
-        let meta_file = meta_file_opt.unwrap();
+        let _meta_file = meta_file_opt.unwrap();
         let mut runnable_file = runnable_file_opt.unwrap();
 
         let compilation_unit_result = self.compiler.compile(&mut runnable_file);
@@ -204,21 +217,12 @@ impl ModuleManager {
                 compilation_unit_result.err().unwrap()
             ));
         }
-        self.module_map
-            .insert(
-                module_name.clone(),
-                LoadedModule {
-                    status: ModuleStatus::deployed,
-                    ..module.clone()
-                },
-            )
-            .unwrap();
-
-        Ok(ModuleStatus::deployed)
+        self.change_status(&module_name.clone(), &module,  ModuleStatus::Deploy);
+        Ok(ModuleStatus::Deployed)
     }
 
     fn undeploy(&mut self, module_name: &String) -> Result<ModuleStatus, String> {
-        let mod_opt = self.module_map.get(module_name);
+        let mod_opt = self.module_map.get(&module_name.clone());
         if mod_opt.is_none() {
             return Err(format!(
                 "Cannot find module by name {} during undeploy",
@@ -227,20 +231,21 @@ impl ModuleManager {
         }
         let module = mod_opt.unwrap();
         let module_path = module.file_path.clone();
-        self.module_map
-            .insert(
-                module_name.clone(),
-                LoadedModule {
-                    status: ModuleStatus::undeployed,
-                    ..module.clone()
-                },
-            )
-            .unwrap();
         if !module_path.exists() {
-            fs::remove_file(module_path.clone());
+            fs::remove_file(module_path.clone())?;
             self.module_map.remove(module_name).unwrap();
         }
-        Ok(ModuleStatus::undeployed)
+        Ok(ModuleStatus::Undeployed)
+    }
+
+    fn change_status(&mut self, module_name: &String, module: &Module, status: ModuleStatus) {
+        let module_replacement = Module {
+            status: status,
+            ..module.clone()
+        };
+        self.module_map
+            .insert(module_name.clone(), module_replacement)
+            .unwrap();
     }
 }
 
@@ -260,20 +265,20 @@ fn open_zip(path: PathBuf) -> Result<ZipArchive<impl Read + Seek>, String> {
 
 #[derive(AsRefStr, PartialEq, Clone, Copy)]
 pub enum ModuleStatus {
-    deploy,
-    deployed,
-    undeploy,
-    undeployed,
+    Deploy,
+    Deployed,
+    Undeploy,
+    Undeployed,
 }
 
 impl ModuleStatus {
     fn from_string(str: &String) -> ModuleStatus {
         match str.as_str() {
-            "deploy" => ModuleStatus::deploy,
-            "undeploy" => ModuleStatus::undeploy,
-            "running" => ModuleStatus::deployed,
-            "undeployed" => ModuleStatus::undeployed,
-            _ => ModuleStatus::undeployed,
+            "deploy" => ModuleStatus::Deploy,
+            "undeploy" => ModuleStatus::Undeploy,
+            "running" => ModuleStatus::Deployed,
+            "undeployed" => ModuleStatus::Undeployed,
+            _ => ModuleStatus::Undeployed,
         }
     }
 }
