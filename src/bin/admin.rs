@@ -21,8 +21,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum ModuleCommands {
-    List {
-    },
+    List {},
     Load {
         #[clap(short, long)]
         file_path: std::path::PathBuf,
@@ -32,8 +31,8 @@ enum ModuleCommands {
         base: std::path::PathBuf,
 
         #[clap(short, long)]
-        entry_file: std::path::PathBuf
-    }
+        entry_file: std::path::PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -42,27 +41,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_address = args.server_address;
     let mut client = ModulesClient::connect(server_address.clone())
         .await
-        .expect(&format!("Cannot connect to server at {}", server_address.clone()));
+        .expect(&format!(
+            "Cannot connect to server at {}",
+            server_address.clone()
+        ));
 
     match args.command.unwrap() {
-        List => {
-            match client.list(Empty{}).await {
-                Ok(response) => {
-                    let reply = response.into_inner();
-                    println!("Found {} modules", reply.item_no);
-                    println!("NAME\t\tSTATE");
-                    for item in reply.items {
-                        println!("{}\t\t{}", item.name, item.status)
-                    }
-                },
-                Err(err) => println!("Cannot list modules: {}", err.message())
+        List => match client.list(Empty {}).await {
+            Ok(response) => {
+                let reply = response.into_inner();
+                println!("Found {} modules", reply.item_no);
+                println!("NAME\t\tSTATE");
+                for item in reply.items {
+                    println!("{}\t\t{}", item.name, item.status)
+                }
             }
+            Err(err) => println!("Cannot list modules: {}", err.message()),
         },
-        Compile => {
-            
-        },
-        Load => {
-        }
+        Compile => {}
+        Load => {}
     }
     return Ok(());
 }

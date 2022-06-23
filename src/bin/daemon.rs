@@ -1,9 +1,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::vec::Vec;
 
-use tonic::{transport::Server, Request, Response, Status, Streaming};
 use clap::Parser;
 use console::Style;
+use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
@@ -28,15 +28,14 @@ pub struct LoadedModule {
     name: String,
     path: String,
     status: String,
-    processes: Vec<i32>
+    processes: Vec<i32>,
 }
 
-#[derive(Debug)]
 pub struct MyModules {
     hot_folder_path: std::path::PathBuf,
     mutex: std::sync::Mutex<u8>,
     loaded_modules: Vec<LoadedModule>,
-    is_running: AtomicBool
+    is_running: AtomicBool,
 }
 
 impl MyModules {
@@ -44,8 +43,8 @@ impl MyModules {
         MyModules {
             hot_folder_path: path,
             is_running: AtomicBool::new(false),
-            loaded_modules: vec!(),
-            mutex: std::sync::Mutex::new(0)
+            loaded_modules: vec![],
+            mutex: std::sync::Mutex::new(0),
         }
     }
 }
@@ -55,48 +54,63 @@ impl Modules for MyModules {
     async fn list(&self, request: Request<Empty>) -> Result<Response<ModuleListReply>, Status> {
         match self.mutex.lock() {
             Ok(lock) => {
-                let items = self.loaded_modules.iter().map(|loaded_module| {
-                    return ModuleListReplyItem {
-                        name: String::from(&loaded_module.name),
-                        status: loaded_module.status.clone(),
-                        successes: 0,
-                        failures: 0,
-                        total_messages: 0,
-                        fail_rate_per_minute: 0.0
-                    }
-                }).collect::<Vec<ModuleListReplyItem>>();
+                let items = self
+                    .loaded_modules
+                    .iter()
+                    .map(|loaded_module| {
+                        return ModuleListReplyItem {
+                            name: String::from(&loaded_module.name),
+                            status: loaded_module.status.clone(),
+                            successes: 0,
+                            failures: 0,
+                            total_messages: 0,
+                            fail_rate_per_minute: 0.0,
+                        };
+                    })
+                    .collect::<Vec<ModuleListReplyItem>>();
                 return Ok(Response::new(ModuleListReply {
                     items: items,
                     item_no: self.loaded_modules.len() as i32,
                 }));
-            },
-            _ => { return Result::Err(Status::new(tonic::Code::from(500), "cannot acquire lock")); }
+            }
+            _ => {
+                return Err(Status::new(tonic::Code::from(500), "cannot acquire lock"));
+            }
         }
     }
 
-    async fn load(&self, request: Request<Streaming<ModuleLoadPartRequest>>) -> Result<Response<ModuleLoadReply>, Status> {
+    async fn load(
+        &self,
+        request: Request<Streaming<ModuleLoadPartRequest>>,
+    ) -> Result<Response<ModuleLoadReply>, Status> {
         return Ok(Response::new(ModuleLoadReply {
             success: false,
             error_message: None,
-            time: 0
+            time: 0,
         }));
     }
 
-    async fn replace(&self, request: Request<ModuleReplaceRequest>) -> Result<Response<ModuleReplaceReply>, Status> {
+    async fn replace(
+        &self,
+        request: Request<ModuleReplaceRequest>,
+    ) -> Result<Response<ModuleReplaceReply>, Status> {
         return Ok(Response::new(ModuleReplaceReply {
             success: false,
             error_message: None,
-            time: 0
-        }))
+            time: 0,
+        }));
     }
 
-    async fn unload(&self, request: Request<ModuleUnloadRequest>) -> Result<Response<ModuleUnloadReply>, Status> {
+    async fn unload(
+        &self,
+        request: Request<ModuleUnloadRequest>,
+    ) -> Result<Response<ModuleUnloadReply>, Status> {
         return Ok(Response::new(ModuleUnloadReply {
             success: false,
             error_message: None,
             unloaded_module_name: String::from("proc"),
-            time: 0
-        }))
+            time: 0,
+        }));
     }
 }
 
