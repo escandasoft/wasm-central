@@ -39,8 +39,9 @@ pub struct LoadedModule {
     compilation: Option<CompilationUnit>,
 }
 
-pub struct ModuleHandle {
-    name: String,
+pub struct ModuleHandle<'a> {
+    pub name: String,
+    backreference: &'a ModuleManager,
 }
 
 pub struct ModuleManager {
@@ -124,6 +125,7 @@ impl ModuleManager {
             if module_opt.is_some() && module_status.eq(&ModuleStatus::deployed) {
                 Some(ModuleHandle {
                     name: module_name.clone(),
+                    backreference: self
                 })
             } else {
                 None

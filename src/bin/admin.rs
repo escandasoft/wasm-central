@@ -58,8 +58,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(err) => println!("Cannot list modules: {}", err.message()),
         },
-        Compile => {}
-        Load => {}
+        Compile => {
+        },
+        Load => {},
     }
     return Ok(());
 }

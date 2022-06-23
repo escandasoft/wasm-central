@@ -3,7 +3,6 @@ mod modules;
 
 use modules::ModuleManager;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::vec::Vec;
 
 use clap::Parser;
@@ -28,17 +27,13 @@ pub mod datatx_proto {
 }
 
 pub struct MyModules {
-    hot_folder_path: std::path::PathBuf,
     mutex: std::sync::Mutex<u8>,
-    is_running: AtomicBool,
     manager: ModuleManager,
 }
 
 impl MyModules {
     fn new(path: std::path::PathBuf) -> MyModules {
         MyModules {
-            hot_folder_path: path.clone(),
-            is_running: AtomicBool::new(false),
             mutex: std::sync::Mutex::new(0),
             manager: ModuleManager::new(path.clone()),
         }

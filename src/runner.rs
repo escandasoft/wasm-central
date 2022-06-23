@@ -19,7 +19,7 @@ pub struct CompilationUnit {
 }
 
 pub struct Compiler {
-    pub engine: Arc<UniversalEngine>,
+    engine: Arc<UniversalEngine>,
     store: Store,
 }
 
@@ -85,7 +85,7 @@ fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, Strin
 }
 
 pub struct Executor {
-    pub engine: Arc<UniversalEngine>,
+    engine: Arc<UniversalEngine>,
 }
 
 const PROCESS_FN_SYM: &str = "process";
@@ -93,7 +93,7 @@ const PROCESS_FN_SYM: &str = "process";
 const HANDLE_ERROR_FN_SYM: &str = "on_error";
 
 impl Executor {
-    pub fn new(&self, engine: Arc<UniversalEngine>) -> Executor {
+    pub fn new(engine: Arc<UniversalEngine>) -> Executor {
         Executor { engine }
     }
 
