@@ -1,7 +1,4 @@
-#[path = "../modules.rs"]
-mod modules;
-
-use modules::ModuleManager;
+use wasm_central_runner::modules::ModuleManager;
 
 use std::vec::Vec;
 
@@ -11,7 +8,7 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
-use crate::modules::ModuleStatus;
+use wasm_central_runner::modules::ModuleStatus;
 
 #[derive(Parser)]
 struct Cli {

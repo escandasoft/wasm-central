@@ -1,7 +1,4 @@
-#[path = "../src/modules.rs"]
-mod modules;
-
-use modules::ModuleManager;
+use wasm_central_runner::modules::ModuleManager;
 
 use std::fs;
 use std::io::Write;
@@ -12,7 +9,7 @@ use std::path::PathBuf;
 fn test_file_handling() {
     let path = PathBuf::from("./");
 
-    let full_path = path.join("module.zip");
+    let full_path = path.join("../../../module.zip");
     let rt_path = path.join("target/runtime/");
 
     fs::remove_dir_all(rt_path.clone()).unwrap();
@@ -23,7 +20,7 @@ fn test_file_handling() {
     module_manager.tick();
     assert_eq!(0, module_manager.running_modules().len());
 
-    let module_path = rt_path.join("module.zip");
+    let module_path = rt_path.join("../../../module.zip");
     fs::copy(full_path.clone(), module_path.clone())
         .expect("Cannot copy module.zip into ./target/runtime/");
 

@@ -1,0 +1,16 @@
+[package]
+name = "wasm-central-runner"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zip = "0.6.2"
+sha2 = "0.10.2"
+wasmer = "2.3.0"
+wasmer-wasi = "2.3.0"
+fork = "0.1.19"
+nc = "0.8.4"
+libc = "0.2.126"
+strum_macros = "0.24.0"

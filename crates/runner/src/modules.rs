@@ -1,12 +1,5 @@
-#[path = "./watcher.rs"]
-mod watcher;
-#[path = "./runner.rs"]
-mod runner;
-#[path = "./data.rs"]
-mod data;
-
-use watcher::DirectoryWatcher;
-use runner::{Compiler, CompilationUnit};
+use crate::watcher::DirectoryWatcher;
+use crate::runner::{Compiler, CompilationUnit};
 use sha2::digest::generic_array::{ArrayLength, GenericArray};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
