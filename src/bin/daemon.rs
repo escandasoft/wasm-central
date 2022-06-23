@@ -1,3 +1,8 @@
+#[path = "../modules.rs"]
+mod modules;
+
+use modules::ModuleManager;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::vec::Vec;
 
@@ -7,8 +12,7 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
-
-use wasm_central::watcher::DirectoryWatcher;
+use crate::modules::ModuleStatus;
 
 #[derive(Parser)]
 struct Cli {
@@ -23,28 +27,20 @@ pub mod datatx_proto {
     tonic::include_proto!("datatx_proto");
 }
 
-#[derive(Debug)]
-pub struct LoadedModule {
-    name: String,
-    path: String,
-    status: String,
-    processes: Vec<i32>,
-}
-
 pub struct MyModules {
     hot_folder_path: std::path::PathBuf,
     mutex: std::sync::Mutex<u8>,
-    loaded_modules: Vec<LoadedModule>,
     is_running: AtomicBool,
+    manager: ModuleManager,
 }
 
 impl MyModules {
     fn new(path: std::path::PathBuf) -> MyModules {
         MyModules {
-            hot_folder_path: path,
+            hot_folder_path: path.clone(),
             is_running: AtomicBool::new(false),
-            loaded_modules: vec![],
             mutex: std::sync::Mutex::new(0),
+            manager: ModuleManager::new(path.clone()),
         }
     }
 }
@@ -55,22 +51,29 @@ impl Modules for MyModules {
         match self.mutex.lock() {
             Ok(lock) => {
                 let items = self
-                    .loaded_modules
+                    .manager
+                    .running_modules()
                     .iter()
                     .map(|loaded_module| {
-                        return ModuleListReplyItem {
+                        let module_status = match loaded_module.status{
+                            ModuleStatus::deploy => "deploy",
+                            ModuleStatus::deployed => "deployed",
+                            ModuleStatus::undeploy => "undeploy",
+                            ModuleStatus::undeployed => "undeployed",
+                        };
+                        ModuleListReplyItem {
                             name: String::from(&loaded_module.name),
-                            status: loaded_module.status.clone(),
+                            status: String::from(module_status),
                             successes: 0,
                             failures: 0,
                             total_messages: 0,
                             fail_rate_per_minute: 0.0,
-                        };
+                        }
                     })
                     .collect::<Vec<ModuleListReplyItem>>();
                 return Ok(Response::new(ModuleListReply {
-                    items: items,
-                    item_no: self.loaded_modules.len() as i32,
+                    items: items.clone(),
+                    item_no: items.len() as i32,
                 }));
             }
             _ => {
@@ -126,7 +129,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let watcher = DirectoryWatcher::new(path.clone());
     let service = MyModules::new(path.clone());
 
     let bootstrap_future = Server::builder()
