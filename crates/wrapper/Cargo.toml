@@ -1,5 +1,5 @@
 [package]
-name = "wasm-central-compiler"
+name = "wasm-central-wrapper"
 version = "0.1.0"
 edition = "2021"
 

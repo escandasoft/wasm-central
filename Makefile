@@ -33,25 +33,25 @@ fmt: fmt-cli fmt-daemon fmt-runner fmt-wrapper
 
 fmt-cli:
 		cd crates/cli/ \
-				&& cargo fmt -- --check \
+				&& cargo fmt -- \
 				&& cargo clippy -- -D warnings \
 				&& cd -
 
 fmt-daemon:
 		cd crates/daemon/ \
-				&& cargo fmt -- --check \
+				&& cargo fmt -- \
 				&& cargo clippy -- -D warnings \
 				&& cd -
 
 fmt-runner:
 		cd crates/runner/ \
-				&& cargo fmt -- --check \
+				&& cargo fmt -- \
 				&& cargo clippy -- -D warnings \
 				&& cd -
 
 fmt-wrapper:
 		cd crates/core/ \
-				&& cargo fmt -- --check \
+				&& cargo fmt -- \
 				&& cargo clippy --target=wasm32-wasi -- -D warnings \
 				&& cd -
 
