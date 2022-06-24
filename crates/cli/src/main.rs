@@ -1,40 +1,13 @@
-use clap::{Parser, Subcommand};
+mod options;
+
+use clap::Parser;
+use options::{Args, ModuleCommands};
 
 use crate::datatx_proto::modules_client::ModulesClient;
 use crate::datatx_proto::*;
 
 pub mod datatx_proto {
     tonic::include_proto!("datatx_proto");
-}
-
-#[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(short, long)]
-    server_address_host: String,
-    /// Name of the person to greet
-    #[clap(short, long)]
-    server_address_port: String,
-
-    /// Number of times to greet
-    #[clap(subcommand)]
-    command: Option<ModuleCommands>,
-}
-
-#[derive(Subcommand, PartialEq)]
-enum ModuleCommands {
-    List {},
-    Load {
-        #[clap(short, long)]
-        file_path: std::path::PathBuf,
-    },
-    Compile {
-        #[clap(short, long)]
-        base: std::path::PathBuf,
-
-        #[clap(short, long)]
-        entry_file: std::path::PathBuf,
-    },
 }
 
 #[tokio::main]
@@ -59,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(command) = args.command {
         match command {
-            ModuleCommands::List { } => match client.list(Empty {}).await {
+            ModuleCommands::List {} => match client.list(Empty {}).await {
                 Ok(response) => {
                     let reply = response.into_inner();
                     println!("Found {} modules", reply.item_no);
@@ -70,9 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(err) => println!("Cannot list modules: {}", err.message()),
             },
-            ModuleCommands::Compile { base, entry_file } => {
-                
-            },
+            ModuleCommands::Compile {
+                base,
+                input_file,
+                output_file,
+            } => {},
             ModuleCommands::Load { file_path } => {}
         }
     }
