@@ -21,7 +21,7 @@ struct Args {
     command: Option<ModuleCommands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, PartialEq)]
 enum ModuleCommands {
     List {},
     Load {
@@ -59,21 +59,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(command) = args.command {
         match command {
-            List => {
-                match client.list(Empty {}).await {
-                    Ok(response) => {
-                        let reply = response.into_inner();
-                        println!("Found {} modules", reply.item_no);
-                        println!("NAME\t\tSTATE");
-                        for item in reply.items {
-                            println!("{}\t\t{}", item.name, item.status)
-                        }
+            ModuleCommands::List { } => match client.list(Empty {}).await {
+                Ok(response) => {
+                    let reply = response.into_inner();
+                    println!("Found {} modules", reply.item_no);
+                    println!("NAME\t\tSTATE");
+                    for item in reply.items {
+                        println!("{}\t\t{}", item.name, item.status)
                     }
-                    Err(err) => println!("Cannot list modules: {}", err.message()),
                 }
+                Err(err) => println!("Cannot list modules: {}", err.message()),
             },
-            Compile => {},
-            Load => {}
+            ModuleCommands::Compile { base, entry_file } => {
+                crate::compiler
+            },
+            ModuleCommands::Load { file_path } => {}
         }
     }
     Ok(())
