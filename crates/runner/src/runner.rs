@@ -84,17 +84,15 @@ fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, Strin
     }
 }
 
-pub struct Executor {
-    engine: Arc<UniversalEngine>,
-}
+pub struct Executor;
 
 const PROCESS_FN_SYM: &str = "process";
 
 const HANDLE_ERROR_FN_SYM: &str = "on_error";
 
 impl Executor {
-    pub fn new(engine: Arc<UniversalEngine>) -> Executor {
-        Executor { engine }
+    pub fn new(_engine: Arc<UniversalEngine>) -> Executor {
+        Executor { }
     }
 
     pub fn execute(

@@ -15,7 +15,7 @@ fn test_executor_basics() {
 
     let mut module_manager = ModuleManager::new(rt_path.clone());
 
-    let module_path = rt_path.join("../../../module.zip");
+    let module_path = rt_path.join("./module.zip");
     fs::copy(full_path.clone(), module_path.clone())
         .expect("Cannot copy module.zip into ./target/runtime/");
 

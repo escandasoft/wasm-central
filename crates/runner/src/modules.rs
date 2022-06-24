@@ -5,6 +5,7 @@ use crate::watcher::DirectoryWatcher;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::io::{Read, Seek};
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -12,12 +13,12 @@ use strum_macros::AsRefStr;
 use thiserror::Error;
 use zip::ZipArchive;
 
-fn get_file_checksum(p: &PathBuf) -> String {
-    let mut file = fs::File::open(&p).expect("Cannot open file to calculate checksum");
+fn get_file_checksum(p: &PathBuf) -> Result<String, io::Error> {
+    let mut file = fs::File::open(&p)?;
     let mut hasher = Sha256::new();
-    std::io::copy(&mut file, &mut hasher).expect("Cannot copy contents into Digest for checksum");
+    std::io::copy(&mut file, &mut hasher)?;
     let new_checksum_arr = hasher.finalize();
-    format!("{:x}", new_checksum_arr)
+    Ok(format!("{:x}", new_checksum_arr))
 }
 
 #[derive(Clone)]
@@ -93,19 +94,28 @@ impl ModuleManager {
             if item_opt.is_some() {
                 let item = item_opt.unwrap();
                 let new_checksum = get_file_checksum(&file_entry.path);
-                if !new_checksum.eq(&item.checksum) {
-                    self.load(&module_name, &next_status);
+                if new_checksum.is_ok() {
+                    if !new_checksum.unwrap().eq(&item.checksum) {
+                        self.load(&module_name, &next_status);
+                    }
+                } else {
+                    eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), new_checksum.err().unwrap());
                 }
             } else {
-                let item = Module {
-                    checksum: get_file_checksum(&file_entry.path),
-                    name: module_name.clone(),
-                    status: ModuleStatus::Undeployed,
-                    file_path: file_entry.path.clone(),
-                    compilation: None,
-                };
-                self.module_map.insert(module_name.to_string(), item);
-                self.load(&module_name, &next_status);
+                let file_checksum = get_file_checksum(&file_entry.path);
+                if file_checksum.is_ok() {
+                    let item = Module {
+                        checksum: file_checksum.unwrap(),
+                        name: module_name.clone(),
+                        status: ModuleStatus::Undeployed,
+                        file_path: file_entry.path.clone(),
+                        compilation: None,
+                    };
+                    self.module_map.insert(module_name.to_string(), item);
+                    self.load(&module_name, &next_status);
+                } else {
+                    eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), file_checksum.err().unwrap());
+                }
             }
         }
         let to_undeploy = self.get_to_undeploy();
@@ -176,8 +186,8 @@ impl ModuleManager {
                         "Couldn't deploy {} because: {}",
                         module_name,
                         match deploy_result.err().unwrap() {
-                            ModuleManagerError::UnavailableModule(module_name) => String::from("The module is not available anymore"),
-                            ModuleManagerError::CompilationError(module_name, err_msg) => err_msg
+                            ModuleManagerError::UnavailableModule(module_name) => format!("The module {} is not available anymore", module_name),
+                            ModuleManagerError::CompilationError(_module_name, err_msg) => err_msg
                         }
                     );
                 } else {
@@ -262,7 +272,7 @@ impl ModuleManager {
 
     fn change_status(&mut self, module_name: &String, module: &Module, status: ModuleStatus) {
         let module_replacement = Module {
-            status: status,
+            status,
             ..module.clone()
         };
         self.module_map

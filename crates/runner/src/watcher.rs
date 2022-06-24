@@ -55,7 +55,7 @@ impl DirectoryWatcher {
                 );
                 dropped_files.push(WatcherEntry {
                     path: pbuf,
-                    next_status: next_status,
+                    next_status,
                 });
             }
         }
