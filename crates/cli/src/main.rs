@@ -36,28 +36,32 @@ enum ModuleCommands {
 }
 
 #[tokio::main]
+#[warn(non_snake_case)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let server_address = args.server_address;
     let mut client = ModulesClient::connect(server_address.clone())
         .await
-        .unwrap_or_else(|_| panic!("Cannot connect to server at {}",
-            server_address.clone()));
+        .unwrap_or_else(|_| panic!("Cannot connect to server at {}", server_address.clone()));
 
-    match args.command.unwrap() {
-        _List => match client.list(Empty {}).await {
-            Ok(response) => {
-                let reply = response.into_inner();
-                println!("Found {} modules", reply.item_no);
-                println!("NAME\t\tSTATE");
-                for item in reply.items {
-                    println!("{}\t\t{}", item.name, item.status)
+    if let Some(command) = args.command {
+        match command {
+            List => {
+                match client.list(Empty {}).await {
+                    Ok(response) => {
+                        let reply = response.into_inner();
+                        println!("Found {} modules", reply.item_no);
+                        println!("NAME\t\tSTATE");
+                        for item in reply.items {
+                            println!("{}\t\t{}", item.name, item.status)
+                        }
+                    }
+                    Err(err) => println!("Cannot list modules: {}", err.message()),
                 }
-            }
-            Err(err) => println!("Cannot list modules: {}", err.message()),
-        },
-        _Compile => {}
-        _Load => {}
+            },
+            Compile => {}
+            Load => {}
+        }
     }
     Ok(())
 }
