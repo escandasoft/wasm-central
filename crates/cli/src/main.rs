@@ -1,3 +1,4 @@
+mod compiler;
 mod options;
 
 use clap::Parser;
@@ -15,24 +16,11 @@ pub mod datatx_proto {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    let server_address_host = args.server_address_host;
-    let server_address_port = args.server_address_port;
-
-    let mut client = ModulesClient::connect(format!(
-        "http://{}:{}",
-        server_address_host, server_address_port
-    ))
-    .await
-    .unwrap_or_else(|_| {
-        panic!(
-            "Cannot connect to server at {}:{}",
-            server_address_host, server_address_port
-        )
-    });
+    let mut client = create_client();
 
     if let Some(command) = args.command {
         match command {
-            ModuleCommands::List {} => match client.list(Empty {}).await {
+            ModuleCommands::List { host, port } => match client.list(Empty {}).await {
                 Ok(response) => {
                     let reply = response.into_inner();
                     println!("Found {} modules", reply.item_no);
@@ -47,9 +35,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 base,
                 input_file,
                 output_file,
-            } => {},
-            ModuleCommands::Load { file_path } => {}
+            } => match compiler::compile(&base, &input_file, &output_file) {
+                Ok(()) => println!("Successfully compiled JS into file {:?}", output_file),
+                Err(error) => println!(),
+            },
+            ModuleCommands::Deploy { host, port, file_path } => {}
         }
     }
     Ok(())
+}
+
+async fn create_client() {
+    ModulesClient::connect(format!(
+        "http://{}:{}",
+        host, port
+    ))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "Cannot connect to server at {}:{}",
+                host, port
+            )
+        })
 }

@@ -21,14 +21,15 @@ fn copy_engine_binary() {
     if !is_override {
         engine_path.pop();
         engine_path.pop();
-        engine_path = engine_path.join("target/wasm32-wasi/release/.wasm");
+        engine_path = engine_path.join("target/wasm32-wasi/release/wasm-central-wrapper.wasm");
     }
 
     println!("cargo:rerun-if-changed={:?}", engine_path);
     println!("cargo:rerun-if-changed=build.rs");
 
     if engine_path.exists() {
-        let copied_engine_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("engine.wasm");
+        let copied_engine_path =
+            PathBuf::from(env::var("OUT_DIR").unwrap()).join("wasm-central-wrapper.wasm");
 
         fs::copy(&engine_path, &copied_engine_path).unwrap();
     }

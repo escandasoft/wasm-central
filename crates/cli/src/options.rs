@@ -4,21 +4,26 @@ use clap::Subcommand;
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
-    #[clap(short, long)]
-    pub server_address_host: String,
-    /// Name of the person to greet
-    #[clap(short, long)]
-    pub server_address_port: i16,
-
-    /// Number of times to greet
     #[clap(subcommand)]
     pub command: Option<ModuleCommands>,
 }
 
 #[derive(Subcommand)]
 pub enum ModuleCommands {
-    List {},
-    Load {
+    List {
+        #[clap(short, long)]
+        host: String,
+
+        #[clap(short, long)]
+        port: i16,
+    },
+    Deploy {
+        #[clap(short, long)]
+        host: String,
+
+        #[clap(short, long)]
+        port: i16,
+
         #[clap(short, long)]
         file_path: std::path::PathBuf,
     },

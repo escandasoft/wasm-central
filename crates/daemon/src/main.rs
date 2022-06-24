@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+use std::time::Duration;
 use wasm_central_runner::modules::ModuleManager;
 
 use std::vec::Vec;
@@ -5,6 +7,8 @@ use std::vec::Vec;
 use clap::Parser;
 use console::Style;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
+
+use std::thread;
 
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
@@ -103,6 +107,8 @@ impl Modules for MyModules {
     }
 }
 
+const MODULE_MANAGER_LOOP_WAIT: u64 = 1000;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::parse();
@@ -115,12 +121,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let service = MyModules::new(path.clone());
+    let modules = MyModules::new(path.clone());
+    let mut modules = Box::new(modules);
 
+    let modules_server = ModulesServer::new(modules.deref_mut());
     let bootstrap_future = Server::builder()
-        .add_service(ModulesServer::new(service))
+        .add_service(modules_server)
         .serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
+    thread::spawn(move || loop {
+        modules.deref_mut().manager.tick();
+        thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
+    });
     bootstrap_future.await?;
     return Ok(());
 }
