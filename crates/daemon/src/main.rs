@@ -8,7 +8,6 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use crate::datatx_proto::modules_server::{Modules, ModulesServer};
 use crate::datatx_proto::*;
-use wasm_central_runner::modules::ModuleStatus;
 
 #[derive(Parser)]
 struct Cli {
@@ -47,10 +46,10 @@ impl Modules for MyModules {
                     .running_modules()
                     .iter()
                     .map(|loaded_module| {
-                        let module_status = loaded_module.status.to_string();
+                        let module_status = loaded_module.status;
                         ModuleListReplyItem {
                             name: String::from(&loaded_module.name),
-                            status: String::from(module_status),
+                            status: module_status.as_string(),
                             successes: 0,
                             failures: 0,
                             total_messages: 0,

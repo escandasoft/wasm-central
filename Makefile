@@ -1,14 +1,15 @@
 .PHONY: cli wrapper daemon runner
-.DEFAULT_GOAL := cli
+.DEFAULT_GOAL := all
 
-download-wasi-sdk: ensure_wasi_sdk
+download-wasi-sdk:
 	./install_wasi_sdk.sh
+
+all: wrapper cli runner daemon
 
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
 
 wrapper:
-
 	cd crates/wrapper \
 		&& QUICKJS_WASM_SYS_WASI_SDK_PATH="$(shell pwd)/crates/wrapper/wasi-sdk" cargo build --release --target=wasm32-wasi \
 		&& cd -

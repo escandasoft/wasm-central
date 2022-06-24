@@ -61,9 +61,7 @@ fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
                 None
             }
         }
-        Err(error) => {
-            Some(format!("Cannot create instance because error: {}", error))
-        }
+        Err(error) => Some(format!("Cannot create instance because error: {}", error)),
     }
 }
 
@@ -76,10 +74,10 @@ fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, Strin
             Link(_error) => Err("Cannot create WASM instance: linking error".to_string()),
             Start(_error) => Err("Cannot create WASM instance: start error".to_string()),
             HostEnvInitialization(_error) => {
-            Err("Cannot create WASM instance: host env init".to_string())
+                Err("Cannot create WASM instance: host env init".to_string())
             }
             _ => Err("Cannot create WASM instance: unknown _error".to_string()),
-        }
+        },
     }
 }
 
@@ -91,7 +89,7 @@ const HANDLE_ERROR_FN_SYM: &str = "on_error";
 
 impl Executor {
     pub fn new(_engine: Arc<UniversalEngine>) -> Executor {
-        Executor { }
+        Executor {}
     }
 
     pub fn execute(
@@ -100,23 +98,25 @@ impl Executor {
         _frame: &DataFrame,
     ) -> Result<DataFrame, String> {
         match fork::fork() {
-            Ok(Fork::Child) => {
-                match create_instance(compilation_unit) {
-                    Ok(instance) => {
-                        match instance.exports.get_function(PROCESS_FN_SYM) {
-                            Ok(exported_fn) => {
-                                exported_fn.call(&[]).unwrap();
-                            }
-                            Err(error) => {
-                                eprintln!("Cannot get exported function {}: {:?}", PROCESS_FN_SYM, error);
-                            }
-                        }
+            Ok(Fork::Child) => match create_instance(compilation_unit) {
+                Ok(instance) => match instance.exports.get_function(PROCESS_FN_SYM) {
+                    Ok(exported_fn) => {
+                        exported_fn.call(&[]).unwrap();
                     }
                     Err(error) => {
-                        eprintln!("Cannot create instance of compilation unit because {}", error)
+                        eprintln!(
+                            "Cannot get exported function {}: {:?}",
+                            PROCESS_FN_SYM, error
+                        );
                     }
+                },
+                Err(error) => {
+                    eprintln!(
+                        "Cannot create instance of compilation unit because {}",
+                        error
+                    )
                 }
-            }
+            },
             Ok(Fork::Parent(child)) => unsafe {
                 let pidfd = nc::pidfd_open(child, 0);
                 if pidfd == Err(nc::errno::ENOSYS) {

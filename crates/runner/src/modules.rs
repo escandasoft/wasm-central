@@ -97,8 +97,12 @@ impl ModuleManager {
                         if !file_checksum.eq(&item.checksum) {
                             self.load(&module_name, &next_status);
                         }
-                    },
-                    Err(error) => eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), error)
+                    }
+                    Err(error) => eprintln!(
+                        "Cannot calculate checksum for module {} because {:?}",
+                        module_name.clone(),
+                        error
+                    ),
                 }
             } else {
                 match get_file_checksum(&file_entry.path) {
@@ -112,8 +116,12 @@ impl ModuleManager {
                         };
                         self.module_map.insert(module_name.to_string(), item);
                         self.load(&module_name, &next_status);
-                    },
-                    Err(error) => eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), error)
+                    }
+                    Err(error) => eprintln!(
+                        "Cannot calculate checksum for module {} because {:?}",
+                        module_name.clone(),
+                        error
+                    ),
                 }
             }
         }
@@ -179,8 +187,9 @@ impl ModuleManager {
                         "Couldn't deploy {} because: {}",
                         module_name,
                         match deploy_result.err().unwrap() {
-                            ModuleManagerError::UnavailableModule(module_name) => format!("The module {} is not available anymore", module_name),
-                            ModuleManagerError::CompilationError(_module_name, err_msg) => err_msg
+                            ModuleManagerError::UnavailableModule(module_name) =>
+                                format!("The module {} is not available anymore", module_name),
+                            ModuleManagerError::CompilationError(_module_name, err_msg) => err_msg,
                         }
                     );
                 } else {
@@ -242,7 +251,9 @@ impl ModuleManager {
             self.change_status(module_name, module, ModuleStatus::Deploy);
             Ok(ModuleStatus::Deployed)
         } else {
-            Err(ModuleManagerError::UnavailableModule(module_name.to_owned()))
+            Err(ModuleManagerError::UnavailableModule(
+                module_name.to_owned(),
+            ))
         }
     }
 
@@ -271,17 +282,15 @@ impl ModuleManager {
 }
 
 fn open_zip(path: PathBuf) -> Result<ZipArchive<impl Read + Seek>, String> {
-    let file = fs::File::open(path);
-    if file.is_err() {
-        return Err("Cannot open zip file".to_string());
+    if let Ok(file) = fs::File::open(path) {
+        if let Ok(archive) = ZipArchive::new(file) {
+            Ok(archive)
+        } else {
+            Err("Cannot open zip file from reader".to_string())
+        }
+    } else {
+        Err("Cannot open zip file".to_string())
     }
-
-    let archive = ZipArchive::new(file.unwrap());
-    if archive.is_err() {
-        return Err("Cannot open zip file from reader".to_string());
-    }
-
-    Ok(archive.unwrap())
 }
 
 #[derive(AsRefStr, PartialEq, Clone, Copy)]
@@ -301,5 +310,15 @@ impl ModuleStatus {
             "undeployed" => ModuleStatus::Undeployed,
             _ => ModuleStatus::Undeployed,
         }
+    }
+
+    pub fn as_string(&self) -> String {
+        let str = match self {
+            ModuleStatus::Deploy => "deploy",
+            ModuleStatus::Deployed => "deployed",
+            ModuleStatus::Undeploy => "undeploy",
+            ModuleStatus::Undeployed => "undeployed",
+        };
+        String::from(str)
     }
 }

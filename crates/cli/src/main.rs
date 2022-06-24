@@ -10,9 +10,11 @@ pub mod datatx_proto {
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    #[clap(short, long)]
+    server_address_host: String,
     /// Name of the person to greet
     #[clap(short, long)]
-    server_address: String,
+    server_address_port: String,
 
     /// Number of times to greet
     #[clap(subcommand)]
@@ -39,10 +41,21 @@ enum ModuleCommands {
 #[warn(non_snake_case)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    let server_address = args.server_address;
-    let mut client = ModulesClient::connect(server_address.clone())
-        .await
-        .unwrap_or_else(|_| panic!("Cannot connect to server at {}", server_address.clone()));
+
+    let server_address_host = args.server_address_host;
+    let server_address_port = args.server_address_port;
+
+    let mut client = ModulesClient::connect(format!(
+        "http://{}:{}",
+        server_address_host, server_address_port
+    ))
+    .await
+    .unwrap_or_else(|_| {
+        panic!(
+            "Cannot connect to server at {}:{}",
+            server_address_host, server_address_port
+        )
+    });
 
     if let Some(command) = args.command {
         match command {
@@ -59,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Err(err) => println!("Cannot list modules: {}", err.message()),
                 }
             },
-            Compile => {}
+            Compile => {},
             Load => {}
         }
     }
