@@ -41,13 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_address = args.server_address;
     let mut client = ModulesClient::connect(server_address.clone())
         .await
-        .expect(&format!(
-            "Cannot connect to server at {}",
-            server_address.clone()
-        ));
+        .unwrap_or_else(|_| panic!("Cannot connect to server at {}",
+            server_address.clone()));
 
     match args.command.unwrap() {
-        List => match client.list(Empty {}).await {
+        _List => match client.list(Empty {}).await {
             Ok(response) => {
                 let reply = response.into_inner();
                 println!("Found {} modules", reply.item_no);
@@ -58,8 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(err) => println!("Cannot list modules: {}", err.message()),
         },
-        Compile => {}
-        Load => {}
+        _Compile => {}
+        _Load => {}
     }
-    return Ok(());
+    Ok(())
 }
