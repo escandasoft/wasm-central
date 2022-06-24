@@ -7,9 +7,10 @@ download-wasi-sdk: ensure_wasi_sdk
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
 
-wrapper: ensure_wasi_sdk
+wrapper:
+
 	cd crates/wrapper \
-		&& cargo build --release --target=wasm32-wasi \
+		&& QUICKJS_WASM_SYS_WASI_SDK_PATH="$(shell pwd)/crates/wrapper/wasi-sdk" cargo build --release --target=wasm32-wasi \
 		&& cd -
 
 runner:
@@ -19,9 +20,6 @@ daemon: runner
 	cd crates/daemon \
 		&& cargo build --release \
 		&& cd -
-
-ensure_wasi_sdk:
-	export QUICKJS_WASM_SYS_WASI_SDK_PATH="$(shell pwd)/crates/wrapper/wasi-sdk"
 
 test-runner:
 		cd crates/runner \
