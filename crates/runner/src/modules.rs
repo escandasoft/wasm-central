@@ -64,7 +64,7 @@ impl ModuleManager {
     pub fn new(path: PathBuf) -> ModuleManager {
         let (compiler, executor) = crate::runner::new_pair();
         ModuleManager {
-            watcher: DirectoryWatcher::new(path.clone()),
+            watcher: DirectoryWatcher::new(path),
             module_map: HashMap::new(),
             compiler,
             executor,
@@ -91,30 +91,29 @@ impl ModuleManager {
             let item_opt = self.module_map.get(&module_name.clone());
             let next_status = ModuleStatus::from_string(&file_entry.next_status);
 
-            if item_opt.is_some() {
-                let item = item_opt.unwrap();
-                let new_checksum = get_file_checksum(&file_entry.path);
-                if new_checksum.is_ok() {
-                    if !new_checksum.unwrap().eq(&item.checksum) {
-                        self.load(&module_name, &next_status);
-                    }
-                } else {
-                    eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), new_checksum.err().unwrap());
+            if let Some(item) = item_opt {
+                match get_file_checksum(&file_entry.path) {
+                    Ok(file_checksum) => {
+                        if !file_checksum.eq(&item.checksum) {
+                            self.load(&module_name, &next_status);
+                        }
+                    },
+                    Err(error) => eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), error)
                 }
             } else {
-                let file_checksum = get_file_checksum(&file_entry.path);
-                if file_checksum.is_ok() {
-                    let item = Module {
-                        checksum: file_checksum.unwrap(),
-                        name: module_name.clone(),
-                        status: ModuleStatus::Undeployed,
-                        file_path: file_entry.path.clone(),
-                        compilation: None,
-                    };
-                    self.module_map.insert(module_name.to_string(), item);
-                    self.load(&module_name, &next_status);
-                } else {
-                    eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), file_checksum.err().unwrap());
+                match get_file_checksum(&file_entry.path) {
+                    Ok(file_checksum) => {
+                        let item = Module {
+                            checksum: file_checksum,
+                            name: module_name.clone(),
+                            status: ModuleStatus::Undeployed,
+                            file_path: file_entry.path.clone(),
+                            compilation: None,
+                        };
+                        self.module_map.insert(module_name.to_string(), item);
+                        self.load(&module_name, &next_status);
+                    },
+                    Err(error) => eprintln!("Cannot calculate checksum for module {} because {:?}", module_name.clone(), error)
                 }
             }
         }
@@ -135,18 +134,10 @@ impl ModuleManager {
     }
 
     pub fn get_handle(&self, module_name: &String) -> Option<ModuleHandle> {
-        let module_opt = self.module_map.get(module_name);
-        if module_opt.is_none() {
-            None
-        } else {
-            let module_status = module_opt.unwrap().status;
-            println!(
-                "!! found module?: {}, status: {}",
-                module_opt.is_some(),
-                module_status.as_ref()
-            );
-            if module_opt.is_some() && module_status.eq(&ModuleStatus::Deployed) {
-                let module = module_opt.unwrap();
+        if let Some(module) = self.module_map.get(module_name) {
+            let module_status = module.status;
+            println!("!! found module?: yes, status: {}", module_status.as_ref());
+            if module_status.eq(&ModuleStatus::Deployed) {
                 let cu = module.compilation.as_ref().unwrap();
                 Some(ModuleHandle {
                     name: module_name.clone(),
@@ -156,6 +147,8 @@ impl ModuleManager {
             } else {
                 None
             }
+        } else {
+            None
         }
     }
 
@@ -202,81 +195,77 @@ impl ModuleManager {
         );
     }
 
-    fn deploy(&mut self, module_name: &String) -> Result<ModuleStatus, ModuleManagerError> {
+    fn deploy(&mut self, module_name: &str) -> Result<ModuleStatus, ModuleManagerError> {
         let module_map = self.running_modules_map();
-        let mod_opt = module_map.get(&module_name.clone());
-        if mod_opt.is_none() {
-            return Err(ModuleManagerError::UnavailableModule(module_name.clone()));
+        if let Some(module) = module_map.get(&module_name.to_owned()) {
+            let meta_zip_result = open_zip(module.file_path.clone());
+            let runnable_zip_result = open_zip(module.file_path.clone());
+
+            if meta_zip_result.is_err() || runnable_zip_result.is_err() {
+                return Err(ModuleManagerError::CompilationError(
+                    module_name.to_owned(),
+                    "cannot open zip archive".to_string(),
+                ));
+            }
+
+            let mut meta_archive = meta_zip_result.unwrap();
+            let meta_file_opt = meta_archive.by_name("meta.json");
+            if meta_file_opt.is_err() {
+                return Err(ModuleManagerError::CompilationError(
+                    module_name.to_owned(),
+                    "cannot find meta.json file in zip archive".to_string(),
+                ));
+            }
+
+            let mut runnable_archive = runnable_zip_result.unwrap();
+            let runnable_file_opt = runnable_archive.by_name("runnable.wasm");
+            if runnable_file_opt.is_err() {
+                return Err(ModuleManagerError::CompilationError(
+                    module_name.to_owned(),
+                    "cannot find runnable.wasm file in zip archive".to_string(),
+                ));
+            }
+
+            let _meta_file = meta_file_opt.unwrap();
+            let mut runnable_file = runnable_file_opt.unwrap();
+
+            let compilation_unit_result = self.compiler.compile(&mut runnable_file);
+            if compilation_unit_result.is_err() {
+                return Err(ModuleManagerError::CompilationError(
+                    module_name.to_owned(),
+                    format!(
+                        "couldn't JIT compile WASM: {:?}",
+                        compilation_unit_result.err().unwrap()
+                    ),
+                ));
+            }
+            self.change_status(module_name, module, ModuleStatus::Deploy);
+            Ok(ModuleStatus::Deployed)
+        } else {
+            Err(ModuleManagerError::UnavailableModule(module_name.to_owned()))
         }
-        let module = mod_opt.unwrap();
-
-        let meta_zip_result = open_zip(module.file_path.clone());
-        let runnable_zip_result = open_zip(module.file_path.clone());
-
-        if meta_zip_result.is_err() || runnable_zip_result.is_err() {
-            return Err(ModuleManagerError::CompilationError(
-                module_name.clone(),
-                "cannot open zip archive".to_string(),
-            ));
-        }
-
-        let mut meta_archive = meta_zip_result.unwrap();
-        let meta_file_opt = meta_archive.by_name("meta.json");
-        if meta_file_opt.is_err() {
-            return Err(ModuleManagerError::CompilationError(
-                module_name.clone(),
-                "cannot find meta.json file in zip archive".to_string(),
-            ));
-        }
-
-        let mut runnable_archive = runnable_zip_result.unwrap();
-        let runnable_file_opt = runnable_archive.by_name("runnable.wasm");
-        if runnable_file_opt.is_err() {
-            return Err(ModuleManagerError::CompilationError(
-                module_name.clone(),
-                "cannot find runnable.wasm file in zip archive".to_string(),
-            ));
-        }
-
-        let _meta_file = meta_file_opt.unwrap();
-        let mut runnable_file = runnable_file_opt.unwrap();
-
-        let compilation_unit_result = self.compiler.compile(&mut runnable_file);
-        if compilation_unit_result.is_err() {
-            return Err(ModuleManagerError::CompilationError(
-                module_name.clone(),
-                format!(
-                    "couldn't JIT compile WASM: {:?}",
-                    compilation_unit_result.err().unwrap()
-                ),
-            ));
-        }
-        self.change_status(&module_name.clone(), &module, ModuleStatus::Deploy);
-        Ok(ModuleStatus::Deployed)
     }
 
     fn undeploy(&mut self, module_name: &String) -> Result<ModuleStatus, ModuleManagerError> {
-        let mod_opt = self.module_map.get(&module_name.clone());
-        if mod_opt.is_none() {
-            Err(ModuleManagerError::UnavailableModule(module_name.clone()))
-        } else {
-            let module = mod_opt.unwrap();
+        if let Some(module) = self.module_map.get(&module_name.clone()) {
             let module_path = module.file_path.clone();
             if !module_path.exists() {
                 let _ = fs::remove_file(module_path);
                 self.module_map.remove(module_name).unwrap();
             }
             Ok(ModuleStatus::Undeployed)
+        } else {
+            Err(ModuleManagerError::UnavailableModule(module_name.clone()))
         }
     }
 
-    fn change_status(&mut self, module_name: &String, module: &Module, status: ModuleStatus) {
+    fn change_status(&mut self, module_name: &str, module: &Module, status: ModuleStatus) {
         let module_replacement = Module {
             status,
             ..module.clone()
         };
         self.module_map
-            .insert(module_name.clone(), module_replacement)
+            .insert(module_name.to_owned(), module_replacement)
             .unwrap();
     }
 }
@@ -304,8 +293,8 @@ pub enum ModuleStatus {
 }
 
 impl ModuleStatus {
-    fn from_string(str: &String) -> ModuleStatus {
-        match str.as_str() {
+    pub fn from_string(str: &str) -> ModuleStatus {
+        match str {
             "deploy" => ModuleStatus::Deploy,
             "undeploy" => ModuleStatus::Undeploy,
             "running" => ModuleStatus::Deployed,

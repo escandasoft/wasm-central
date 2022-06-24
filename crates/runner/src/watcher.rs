@@ -59,6 +59,6 @@ impl DirectoryWatcher {
                 });
             }
         }
-        return dropped_files;
+        dropped_files
     }
 }

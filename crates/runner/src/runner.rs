@@ -21,7 +21,7 @@ pub fn new_pair() -> (Compiler, Executor) {
     let comp_config = Cranelift::default();
     let engine_arc = Arc::new(Universal::new(comp_config).engine());
     let compiler = Compiler::new(engine_arc.clone());
-    let executor = Executor::new(engine_arc.clone());
+    let executor = Executor::new(engine_arc);
     (compiler, executor)
 }
 
@@ -40,9 +40,8 @@ impl Compiler {
         let compilation_unit = CompilationUnit {
             module: module_result.unwrap(),
         };
-        let validation_error = get_validation_errors(&compilation_unit);
-        if validation_error.is_some() {
-            Err(validation_error.unwrap())
+        if let Some(validation_error) = get_validation_errors(&compilation_unit) {
+            Err(validation_error)
         } else {
             Ok(compilation_unit)
         }
@@ -50,34 +49,34 @@ impl Compiler {
 }
 
 fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
-    let instance = create_instance(&compilation_unit);
-    if instance.is_ok() {
-        let exports = instance.unwrap().exports;
-        if exports.get_function(PROCESS_FN_SYM).is_err() {
-            // TODO: check signature
-            Some("Cannot find `process' function in executable".to_string())
-        } else if exports.get_function(HANDLE_ERROR_FN_SYM).is_err() {
-            Some("Cannot find `handle_error' in executable".to_string())
-        } else {
-            None
+    match create_instance(compilation_unit) {
+        Ok(instance) => {
+            let exports = instance.exports;
+            if exports.get_function(PROCESS_FN_SYM).is_err() {
+                // TODO: check signature
+                Some("Cannot find `process' function in executable".to_string())
+            } else if exports.get_function(HANDLE_ERROR_FN_SYM).is_err() {
+                Some("Cannot find `handle_error' in executable".to_string())
+            } else {
+                None
+            }
         }
-    } else {
-        None
+        Err(error) => {
+            Some(format!("Cannot create instance because error: {}", error))
+        }
     }
 }
 
 fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, String> {
     let wasi_env = WasiState::new("runner").finalize();
     let import_object = wasi_env.unwrap().import_object(&compilation_unit.module);
-    let instance = Instance::new(&compilation_unit.module, &import_object.unwrap());
-    if instance.is_ok() {
-        Ok(instance.unwrap())
-    } else {
-        match instance.unwrap_err() {
+    match Instance::new(&compilation_unit.module, &import_object.unwrap()) {
+        Ok(instance) => Ok(instance),
+        Err(error) => match error {
             Link(_error) => Err("Cannot create WASM instance: linking error".to_string()),
             Start(_error) => Err("Cannot create WASM instance: start error".to_string()),
             HostEnvInitialization(_error) => {
-                Err("Cannot create WASM instance: host env init".to_string())
+            Err("Cannot create WASM instance: host env init".to_string())
             }
             _ => Err("Cannot create WASM instance: unknown _error".to_string()),
         }
@@ -102,11 +101,20 @@ impl Executor {
     ) -> Result<DataFrame, String> {
         match fork::fork() {
             Ok(Fork::Child) => {
-                let instance_result = create_instance(&compilation_unit);
-                if instance_result.is_ok() {
-                    let instance = instance_result.unwrap();
-                    let function_result = instance.exports.get_function(PROCESS_FN_SYM);
-                    function_result.unwrap().call(&[]).unwrap();
+                match create_instance(compilation_unit) {
+                    Ok(instance) => {
+                        match instance.exports.get_function(PROCESS_FN_SYM) {
+                            Ok(exported_fn) => {
+                                exported_fn.call(&[]).unwrap();
+                            }
+                            Err(error) => {
+                                eprintln!("Cannot get exported function {}: {:?}", PROCESS_FN_SYM, error);
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("Cannot create instance of compilation unit because {}", error)
+                    }
                 }
             }
             Ok(Fork::Parent(child)) => unsafe {

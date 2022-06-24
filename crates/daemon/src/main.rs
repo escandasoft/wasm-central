@@ -47,12 +47,7 @@ impl Modules for MyModules {
                     .running_modules()
                     .iter()
                     .map(|loaded_module| {
-                        let module_status = match loaded_module.status {
-                            ModuleStatus::Deploy => "deploy",
-                            ModuleStatus::Deployed => "deployed",
-                            ModuleStatus::Undeploy => "undeploy",
-                            ModuleStatus::Undeployed => "undeployed",
-                        };
+                        let module_status = loaded_module.status.to_string();
                         ModuleListReplyItem {
                             name: String::from(&loaded_module.name),
                             status: String::from(module_status),
