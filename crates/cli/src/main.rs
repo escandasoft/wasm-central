@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(err) => println!("Cannot list modules: {}", err.message()),
             },
             ModuleCommands::Compile { base, entry_file } => {
-                crate::compiler
+                
             },
             ModuleCommands::Load { file_path } => {}
         }
