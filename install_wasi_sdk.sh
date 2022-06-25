@@ -7,7 +7,7 @@ if [[ "$(basename $(pwd))" != "wasm-central" ]]; then
     exit 1
 fi
 
-PATH_TO_SDK="crates/compiler/wasi-sdk"
+PATH_TO_SDK="crates/wrapper/wasi-sdk"
 
 # Don't try and install the wasi-sdk if the user has specified the wasi-sdk is installed elsewhere
 set +u
