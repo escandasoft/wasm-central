@@ -11,17 +11,17 @@ pub struct Args {
 #[derive(Subcommand)]
 pub enum ModuleCommands {
     List {
-        #[clap(short, long)]
+        #[clap(short = 'H', long = "host")]
         host: String,
 
-        #[clap(short, long)]
+        #[clap(short = 'p', long = "port")]
         port: i16,
     },
     Deploy {
-        #[clap(short, long)]
+        #[clap(short = 'H', long = "host")]
         host: String,
 
-        #[clap(short, long)]
+        #[clap(short = 'p', long = "port")]
         port: i16,
 
         #[clap(short, long)]
