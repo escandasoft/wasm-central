@@ -26,6 +26,12 @@ pub enum ModuleCommands {
 
         #[clap(short, long)]
         file_path: std::path::PathBuf,
+
+        #[clap(short = 'i', long = "inputs")]
+        inputs: String,
+
+        #[clap(short = 'o', long = "outputs")]
+        outputs: String,
     },
     Compile {
         #[clap(short, long)]

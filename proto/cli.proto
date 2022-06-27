@@ -30,7 +30,9 @@ message ModuleListReplyItem {
 
 message ModuleLoadPartRequest {
   string file_name = 1;
-  bytes zip_file_bytes = 2;
+  string inputs = 2;
+  string outputs = 3;
+  bytes zip_file_bytes = 4;
 }
 
 message ModuleLoadReply {

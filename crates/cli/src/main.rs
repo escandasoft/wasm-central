@@ -46,6 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 base,
                 input_file,
                 output_file,
+
             } => {
                 compiler::compile(&base, &input_file, &output_file);
             }
@@ -53,6 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 host,
                 port,
                 file_path,
+                inputs,
+                outputs
             } => {
                 let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
                     .await
@@ -65,16 +68,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .expect("Cannot read buffer");
                             ModuleLoadPartRequest {
                                 file_name: file_path.clone().file_name().unwrap().to_str().unwrap().to_owned(),
+                                inputs: inputs.clone(),
+                                outputs: outputs.clone(),
                                 zip_file_bytes: buffer[0..read].to_vec()
                             }
                         });
-                        let response = match client.load(iterable).await {
-                            Ok(response) => response.into_inner(),
-                            Err(err) => panic!("Cannot stream deploy")
+                        println!("Starting to stream file to server");
+                        match client.load(iterable).await {
+                            Ok(response) => {
+                                let response = response.into_inner();
+                                if !response.success {
+                                    eprintln!("Cannot deploy because {}", response.error_message.unwrap_or("unknown".to_owned()));
+                                } else {
+                                    println!("Successfully deployed to server");
+                                }
+                            },
+                            Err(err) => {
+                                eprintln!("Cannot deploy because error {:?}", err);
+                            }
                         };
-                        if !response.success {
-                            println!("Cannot deploy because {}", response.error_message.unwrap_or("unknown".to_owned()));
-                        }
                     }
                     Err(_) => {}
                 }

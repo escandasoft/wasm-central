@@ -88,28 +88,28 @@ impl Modules for MyModules {
             });
             full_path = Some(path.clone());
             let zip_file_bytes = item.zip_file_bytes;
-            let open_file = || {
-                if path.clone().exists() {
-                    fs::File::open(path.clone())
+            let open_file = move || {
+                let the_path = path.clone();
+                if the_path.exists() {
+                    fs::File::open(the_path.clone())
                 } else {
-                    fs::File::create(path.clone())
+                    fs::File::create(the_path.clone())
                 }
             };
-            if let Err(err) = match open_file() {
+            match open_file() {
                 Ok(mut file) => {
-                    file.write_at(&zip_file_bytes[..], offset);
-                    Ok(())
+                    let old_offset = offset;
+                    offset += zip_file_bytes.len() as u64;
+                    file.write_at(&zip_file_bytes[..], old_offset)
                 }
                 Err(err) => {
+                    success = false;
+                    eprintln!("Cannot open file for writing {:?}", err);
                     Err(err)
                 }
-            } {
-                println!("Cannot write to full path at {} because {:?}", path.clone().display(), err);
-            } else {
-                offset += zip_file_bytes.len() as u64;
-            }
+            }?;
         }
-        let error_message = if success {
+        let error_message = if !success {
             Some(format!("Cannot load file at {}", full_path.unwrap().display()))
         } else {
             None
