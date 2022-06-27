@@ -1,6 +1,8 @@
 use std::borrow::BorrowMut;
 use std::ops::{Deref, DerefMut};
 use std::ptr::null_mut;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wasm_central_runner::modules::ModuleManager;
 
@@ -20,7 +22,7 @@ use crate::cli_proto::*;
 struct Cli {
     /// Host addr interface to listen to
     address: String,
-    // Port to listen to
+    /// Port to listen to
     port: u16,
     modules_path: std::path::PathBuf,
 }
@@ -29,13 +31,13 @@ pub mod cli_proto {
     tonic::include_proto!("cli_proto");
 }
 
-pub struct MyModules<'a> {
-    mutex: std::sync::Mutex<u8>,
-    manager: &'a Box<ModuleManager>,
+pub struct MyModules {
+    mutex: Mutex<u8>,
+    manager: Arc<Mutex<ModuleManager>>,
 }
 
 impl MyModules {
-    pub fn new(manager: &mut Box<ModuleManager>) -> MyModules<'static> {
+    pub fn new(manager: Arc<Mutex<ModuleManager>>) -> MyModules {
         MyModules {
             mutex: std::sync::Mutex::new(0),
             manager,
@@ -50,6 +52,8 @@ impl Modules for MyModules {
             Ok(_lock) => {
                 let items = self
                     .manager
+                    .lock()
+                    .unwrap()
                     .running_modules()
                     .iter()
                     .map(|loaded_module| {
@@ -124,15 +128,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let mut mgr = Box::new(ModuleManager::new(path.clone()));
+    let mut mgr = Arc::new(Mutex::new(ModuleManager::new(path.clone())));
 
-    let modules = MyModules::new(&mut mgr);
-    let modules_server = ModulesServer::new(modules);
+    let modules_server = ModulesServer::new(MyModules::new(mgr.clone()));
     let bootstrap_future = Server::builder().add_service(modules_server).serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
-    thread::spawn(|| {
+
+    let mut mgr = Arc::clone(&mgr);
+    thread::spawn(move || {
         loop {
-            mgr.tick();
+            mgr.lock().unwrap().tick();
             thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
         }
     });
