@@ -1,36 +1,42 @@
 use std::fs;
-use std::io;
+use std::io::{stderr, stdout};
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::rc::Rc;
-use wasmtime::{Global, GlobalType, Mutability, Val, ValType};
-
+use std::sync::{Arc, RwLock};
 use wizer::Wizer;
 
-pub fn compile(base: &PathBuf, input_file: &PathBuf, output_file: &PathBuf) {
-    let input_wasm = get_input_wasm_bytes();
-    match Wizer::new()
-        .make_linker(Some(Rc::new(|e: &wasmtime::Engine| {
-            let mut linker = wasmtime::Linker::new(e);
-            let ty = GlobalType::new(ValType::, Mutability::Const);
-            let global = Global::new(&mut store, ty, Val::vec)?;
-            linker.define("host", "offset", global)?;
-            Ok(linker)
-        })))
-        .expect("Cannot create linker over WASM")
-        .run(&input_wasm)
-    {
-        Ok(wasm_bytes) => {
-            println!("Sucessfully compiled WASM with Wizer");
+const WASM: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/wasm-central-wrapper.wasm"));
+
+pub fn compile(base: &PathBuf, input_file: &PathBuf, output_file: &PathBuf) -> () {
+    match fs::File::open(input_file) {
+        Ok(mut file) => unsafe {
+            let mut file_buffer = vec![];
+            file.read_to_end(&mut file_buffer).expect("Cannot read to end");
+
+            let stdin = wasi_common::pipe::ReadPipe::from(file_buffer);
+            let stderr = wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(stderr())));
+            let stdout = wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(stdout())));
+
+            let mut wizer = Wizer::new();
+            let mut wizer = wizer
+                .allow_wasi(true).expect("Cannot enable WASI")
+                .inherit_stdio(true);
+            let new_wasm = wizer.run(&WASM, Box::new(stdin), Box::new(stderr), Box::new(stdout))
+                .expect("Cannot run Wizer");
             match fs::File::create(output_file) {
-                Ok(f) => f.write_all(&wasm_bytes),
-                Err(err) => {
-                    eprintln!("Couldn't write to output file at {}", output_file.display());
+                Ok(mut o_file) => {
+                    o_file.write_all(&new_wasm.to_vec())
+                        .expect("Cannot write output file with initialized WASM");
+                    println!("Successfully compiled input file");
+                }
+                Err(_) => {
+                    eprintln!("Cannot create output file at {}", output_file.display());
                 }
             }
-        }
-        Err(err) => {
-            eprintln!("Cannot compile WASM with Wizer {:?}", err);
+        },
+        Err(_) => {
+            eprintln!("Cannot open input file at {}", input_file.display());
         }
     }
-    .expect("Couldn't compile");
+    ()
 }

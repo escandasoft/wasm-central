@@ -37,10 +37,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 base,
                 input_file,
                 output_file,
-            } => match compiler::compile(&base, &input_file, &output_file) {
-                Ok(()) => println!("Successfully compiled JS into file {:?}", output_file),
-                Err(error) => eprintln!("Cannot compile JS into WASM"),
-            },
+            } => {
+                compiler::compile(&base, &input_file, &output_file);
+            }
             ModuleCommands::Deploy {
                 host,
                 port,
@@ -49,6 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
                     .await
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
+                /*
                 match client
                     .load(ModuleLoadPartRequest {
                         zip_file_bytes: vec![],
@@ -56,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .await
                 {
                     Ok(response) => {}
-                }
+                }*/
             }
         }
     }

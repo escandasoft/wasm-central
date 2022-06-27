@@ -1,9 +1,10 @@
 mod engine;
 
-use quickjs_wasm_rs::{Context, Value};
+use std::fs;
+use quickjs_wasm_rs::{Context, Value, json};
 
 use once_cell::sync::OnceCell;
-use std::io::{self, Read};
+use std::io::{self, Read, stderr};
 
 #[cfg(not(test))]
 #[global_allocator]
@@ -23,38 +24,48 @@ static SCRIPT_NAME: &str = "script.js";
 pub extern "C" fn init() {
     unsafe {
         let mut context = Context::default();
-        context
-            .register_globals(io::stderr(), io::stderr())
-            .unwrap();
-
+        if context.register_globals(stderr(), stderr()).is_err() {
+            eprintln!("Cannot register stderr as global for console and logger");
+        }
         let mut contents = String::new();
-        io::stdin().read_to_string(&mut contents).unwrap();
-
-        let _ = context.eval_global(SCRIPT_NAME, &contents).unwrap();
-        let global = context.global_object().unwrap();
-        let shopify = global.get_property("Shopify").unwrap();
-        let main = shopify.get_property("main").unwrap();
-
-        JS_CONTEXT.set(context).unwrap();
-        ENTRYPOINT.0.set(shopify).unwrap();
-        ENTRYPOINT.1.set(main).unwrap();
+        if io::stdin().read_to_string(&mut contents).is_err() {
+            eprintln!("Cannot read stdin")
+        } else {
+            if let Err(err) = context.eval_global(SCRIPT_NAME, &contents) {
+                eprintln!("Cannot eval script");
+            } else {
+                let global = context.global_object().unwrap();
+                if let Ok(ns_object) = global.get_property("Namespace") {
+                    if let Ok(main) = ns_object.get_property("main") {
+                        JS_CONTEXT.set(context).unwrap();
+                        ENTRYPOINT.0.set(ns_object).unwrap();
+                        ENTRYPOINT.1.set(main).unwrap();
+                    } else {
+                        eprintln!("Cannot get main function callback");
+                    }
+                } else {
+                    eprintln!("Cannot get Namespace object");
+                }
+            }
+        }
     }
 }
 
 fn main() {
     unsafe {
-        let _context = JS_CONTEXT.get().unwrap();
-        let shopify = ENTRYPOINT.0.get().unwrap();
+        let context = JS_CONTEXT.get().unwrap();
+        let receiver = ENTRYPOINT.0.get().unwrap();
         let main = ENTRYPOINT.1.get().unwrap();
-        let _input_bytes = engine::load().expect("Couldn't load input");
+        let input_bytes = engine::load().expect("Couldn't load input");
 
-        let output_value = main.call(shopify, &[]);
+        let input_value = json::transcode_input(context, &input_bytes).unwrap();
+        let output_value = main.call(receiver, &[input_value]);
 
         if output_value.is_err() {
             panic!("{}", output_value.unwrap_err().to_string());
         }
 
-        let output = [];
+        let output = json::transcode_output(output_value.unwrap()).unwrap();
         engine::store(&output).expect("Couldn't store output");
     }
 }

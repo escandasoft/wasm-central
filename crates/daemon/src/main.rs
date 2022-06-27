@@ -1,4 +1,6 @@
+use std::borrow::BorrowMut;
 use std::ops::{Deref, DerefMut};
+use std::ptr::null_mut;
 use std::time::Duration;
 use wasm_central_runner::modules::ModuleManager;
 
@@ -10,8 +12,9 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use std::thread;
 
-use crate::datatx_proto::modules_server::{Modules, ModulesServer};
-use crate::datatx_proto::*;
+use crate::cli_proto::modules_server::ModulesServer;
+use crate::cli_proto::modules_server::Modules;
+use crate::cli_proto::*;
 
 #[derive(Parser)]
 struct Cli {
@@ -22,28 +25,28 @@ struct Cli {
     modules_path: std::path::PathBuf,
 }
 
-pub mod datatx_proto {
-    tonic::include_proto!("datatx_proto");
+pub mod cli_proto {
+    tonic::include_proto!("cli_proto");
 }
 
-pub struct MyModules {
+pub struct MyModules<'a> {
     mutex: std::sync::Mutex<u8>,
-    manager: ModuleManager,
+    manager: &'a Box<ModuleManager>,
 }
 
 impl MyModules {
-    fn new(path: std::path::PathBuf) -> MyModules {
+    pub fn new(manager: &mut Box<ModuleManager>) -> MyModules<'static> {
         MyModules {
             mutex: std::sync::Mutex::new(0),
-            manager: ModuleManager::new(path.clone()),
+            manager,
         }
     }
 }
 
 #[tonic::async_trait]
 impl Modules for MyModules {
-    async fn list(&self, request: Request<Empty>) -> Result<Response<ModuleListReply>, Status> {
-        match self.mutex.lock() {
+    async fn list(&self, request: Request<ModuleListRequest>) -> Result<Response<ModuleListReply>, Status> {
+        return match self.mutex.lock() {
             Ok(_lock) => {
                 let items = self
                     .manager
@@ -61,13 +64,13 @@ impl Modules for MyModules {
                         }
                     })
                     .collect::<Vec<ModuleListReplyItem>>();
-                return Ok(Response::new(ModuleListReply {
+                Ok(Response::new(ModuleListReply {
                     items: items.clone(),
                     item_no: items.len() as i32,
-                }));
+                }))
             }
             _ => {
-                return Err(Status::new(tonic::Code::from(500), "cannot acquire lock"));
+                Err(Status::new(tonic::Code::from(500), "cannot acquire lock"))
             }
         }
     }
@@ -121,17 +124,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let modules = MyModules::new(path.clone());
-    let mut modules = Box::new(modules);
+    let mut mgr = Box::new(ModuleManager::new(path.clone()));
 
-    let modules_server = ModulesServer::new(modules.deref_mut());
-    let bootstrap_future = Server::builder()
-        .add_service(modules_server)
-        .serve(faddr);
+    let modules = MyModules::new(&mut mgr);
+    let modules_server = ModulesServer::new(modules);
+    let bootstrap_future = Server::builder().add_service(modules_server).serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
-    thread::spawn(move || loop {
-        modules.deref_mut().manager.tick();
-        thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
+    thread::spawn(|| {
+        loop {
+            mgr.tick();
+            thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
+        }
     });
     bootstrap_future.await?;
     return Ok(());
