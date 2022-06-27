@@ -54,7 +54,7 @@ pub enum ModuleManagerError {
 }
 
 pub struct ModuleManager {
-    watcher: DirectoryWatcher,
+    pub watcher: DirectoryWatcher,
     module_map: HashMap<String, Module>,
     pub compiler: Compiler,
     pub executor: Executor,

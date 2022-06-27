@@ -29,7 +29,8 @@ message ModuleListReplyItem {
 }
 
 message ModuleLoadPartRequest {
-  bytes zip_file_bytes = 1;
+  string file_name = 1;
+  bytes zip_file_bytes = 2;
 }
 
 message ModuleLoadReply {

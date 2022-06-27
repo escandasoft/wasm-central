@@ -1,7 +1,9 @@
 use std::borrow::BorrowMut;
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::ptr::null_mut;
 use std::rc::Rc;
+use std::iter::{Iterator, zip};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wasm_central_runner::modules::ModuleManager;
@@ -12,7 +14,8 @@ use clap::Parser;
 use console::Style;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 
-use std::thread;
+use std::{fs, thread};
+use std::os::unix::fs::FileExt;
 
 use crate::cli_proto::modules_server::ModulesServer;
 use crate::cli_proto::modules_server::Modules;
@@ -74,11 +77,49 @@ impl Modules for MyModules {
         &self,
         request: Request<Streaming<ModuleLoadPartRequest>>,
     ) -> Result<Response<ModuleLoadReply>, Status> {
-        return Ok(Response::new(ModuleLoadReply {
-            success: false,
-            error_message: None,
+        let mut streaming = request.into_inner();
+        let mut success = false;
+        let mut full_path = None;
+        let mut offset = 0 as u64;
+        while let Some(item) = streaming.message().await? {
+            let path = full_path.unwrap_or_else(|| {
+                let rel_file_path = PathBuf::from(item.file_name);
+                self.manager.lock().unwrap().watcher.dir.join(rel_file_path)
+            });
+            full_path = Some(path.clone());
+            let zip_file_bytes = item.zip_file_bytes;
+            let open_file = || {
+                if path.clone().exists() {
+                    fs::File::open(path.clone())
+                } else {
+                    fs::File::create(path.clone())
+                }
+            };
+            if let Err(err) = match open_file() {
+                Ok(mut file) => {
+                    file.write_at(&zip_file_bytes[..], offset);
+                    Ok(())
+                }
+                Err(err) => {
+                    Err(err)
+                }
+            } {
+                println!("Cannot write to full path at {} because {:?}", path.clone().display(), err);
+            } else {
+                offset += zip_file_bytes.len() as u64;
+            }
+        }
+        let error_message = if success {
+            Some(format!("Cannot load file at {}", full_path.unwrap().display()))
+        } else {
+            None
+        };
+        let reply = ModuleLoadReply {
+            success: !success,
+            error_message,
             time: 0,
-        }));
+        };
+        Ok(Response::new(reply))
     }
 
     async fn replace(

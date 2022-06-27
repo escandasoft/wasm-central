@@ -57,22 +57,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
                     .await
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
-                match fs::File::open(file_path) {
+                match fs::File::open(file_path.clone()) {
                     Ok(mut file) => {
                         let iterable = tokio_stream::iter(0..(file.metadata().unwrap().size() / 1024 + 1)).map(move |i| {
                             let mut buffer = Vec::with_capacity(1024);
                             let read = file.read_at(&mut buffer[..], i * 1024 as u64)
                                 .expect("Cannot read buffer");
                             ModuleLoadPartRequest {
+                                file_name: file_path.clone().file_name().unwrap().to_str().unwrap().to_owned(),
                                 zip_file_bytes: buffer[0..read].to_vec()
                             }
                         });
-                        let response = match client.load(iterable)
-                            .await
-                        {
+                        let response = match client.load(iterable).await {
                             Ok(response) => response.into_inner(),
                             Err(err) => panic!("Cannot stream deploy")
                         };
+                        if !response.success {
+                            println!("Cannot deploy because {}", response.error_message.unwrap_or("unknown".to_owned()));
+                        }
                     }
                     Err(_) => {}
                 }
