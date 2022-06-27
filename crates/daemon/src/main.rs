@@ -32,14 +32,12 @@ pub mod cli_proto {
 }
 
 pub struct MyModules {
-    mutex: Mutex<u8>,
     manager: Arc<Mutex<ModuleManager>>,
 }
 
 impl MyModules {
     pub fn new(manager: Arc<Mutex<ModuleManager>>) -> MyModules {
         MyModules {
-            mutex: std::sync::Mutex::new(0),
             manager,
         }
     }
@@ -48,35 +46,28 @@ impl MyModules {
 #[tonic::async_trait]
 impl Modules for MyModules {
     async fn list(&self, request: Request<ModuleListRequest>) -> Result<Response<ModuleListReply>, Status> {
-        return match self.mutex.lock() {
-            Ok(_lock) => {
-                let items = self
-                    .manager
-                    .lock()
-                    .unwrap()
-                    .running_modules()
-                    .iter()
-                    .map(|loaded_module| {
-                        let module_status = loaded_module.status;
-                        ModuleListReplyItem {
-                            name: String::from(&loaded_module.name),
-                            status: module_status.as_string(),
-                            successes: 0,
-                            failures: 0,
-                            total_messages: 0,
-                            fail_rate_per_minute: 0.0,
-                        }
-                    })
-                    .collect::<Vec<ModuleListReplyItem>>();
-                Ok(Response::new(ModuleListReply {
-                    items: items.clone(),
-                    item_no: items.len() as i32,
-                }))
-            }
-            _ => {
-                Err(Status::new(tonic::Code::from(500), "cannot acquire lock"))
-            }
-        }
+        let items = self
+            .manager
+            .lock()
+            .unwrap()
+            .running_modules()
+            .iter()
+            .map(|loaded_module| {
+                let module_status = loaded_module.status;
+                ModuleListReplyItem {
+                    name: String::from(&loaded_module.name),
+                    status: module_status.as_string(),
+                    successes: 0,
+                    failures: 0,
+                    total_messages: 0,
+                    fail_rate_per_minute: 0.0,
+                }
+            })
+            .collect::<Vec<ModuleListReplyItem>>();
+        Ok(Response::new(ModuleListReply {
+            items: items.clone(),
+            item_no: items.len() as i32,
+        }))
     }
 
     async fn load(
@@ -128,13 +119,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let mut mgr = Arc::new(Mutex::new(ModuleManager::new(path.clone())));
+    let mgr = Arc::new(Mutex::new(ModuleManager::new(path.clone())));
 
     let modules_server = ModulesServer::new(MyModules::new(mgr.clone()));
     let bootstrap_future = Server::builder().add_service(modules_server).serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
 
-    let mut mgr = Arc::clone(&mgr);
+    let mgr = Arc::clone(&mgr);
     thread::spawn(move || {
         loop {
             mgr.lock().unwrap().tick();
