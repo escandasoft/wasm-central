@@ -62,12 +62,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
                 match fs::File::open(file_path.clone()) {
                     Ok(mut file) => {
-                        let mut buffer = Vec::with_capacity(1024);
+                        const BUFFER_SIZE: usize = 1024 * 1024;
+                        let mut buffer = vec![];
                         file.read_to_end(&mut buffer).expect("Cannot write to buffer");
-                        let iterable = tokio_stream::iter(0..((buffer.len() / 8192) + 1)).map(move |i| {
+                        let iterable = tokio_stream::iter(0..((buffer.len() / BUFFER_SIZE) + 1)).map(move |i| {
+                            let offset = i * BUFFER_SIZE;
                             println!("!! made ModuleLoadPartRequest {}", i);
-                            let top = cmp::min(buffer.len(), (i + 1024) as usize);
-                            let range = (i as usize)..top;
+                            let top = cmp::min(buffer.len(), offset + BUFFER_SIZE);
+                            let range = offset..top;
                             {
                                 let fmt = range.clone();
                                 println!("!! sending range ({}, {})", fmt.start, fmt.end);
