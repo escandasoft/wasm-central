@@ -49,30 +49,3 @@ message ModuleUnloadReply {
   string unloaded_module_name = 3;
   int64 time = 4;
 }
-
-service Processes {
-  rpc List (ProcessListRequest) returns (ProcessListReply);
-
-  rpc Kill (ProcessKillRequest) returns (ProcessKillReply);
-}
-
-message ProcessListRequest {}
-
-message ProcessListReply {
-  repeated ProcessReply processes = 1;
-}
-
-message ProcessKillRequest {
-  repeated string pids = 1;
-}
-
-message ProcessKillReply {
-  repeated ProcessReply statuses = 1;
-}
-
-message ProcessReply {
-  string pid = 1;
-  string name = 2;
-  string status = 3;
-  int64 time = 4;
-}
