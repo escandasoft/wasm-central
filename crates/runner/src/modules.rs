@@ -84,14 +84,18 @@ impl ModuleManager {
     }
 
     pub fn tick(&mut self) {
+        let to_undeploy = self.get_to_undeploy();
+        for item in to_undeploy {
+            self.undeploy(&item).unwrap();
+        }
+
         let dropped_files = self.watcher.run();
         for file_entry in dropped_files {
             let stem = file_entry.path.file_stem().unwrap();
-            let module_name = String::from(stem.to_str().unwrap());
-            let item_opt = self.module_map.get(&module_name.clone());
+            let module_name = stem.to_str().unwrap().to_owned();
             let next_status = ModuleStatus::from_string(&file_entry.next_status);
 
-            if let Some(item) = item_opt {
+            if let Some(item) = self.module_map.get(&module_name.clone()) {
                 match get_file_checksum(&file_entry.path) {
                     Ok(file_checksum) => {
                         if !file_checksum.eq(&item.checksum) {
@@ -124,10 +128,6 @@ impl ModuleManager {
                     ),
                 }
             }
-        }
-        let to_undeploy = self.get_to_undeploy();
-        for item in to_undeploy {
-            self.undeploy(&item).unwrap();
         }
     }
 

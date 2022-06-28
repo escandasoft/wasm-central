@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::iter::{Iterator, zip};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use wasm_central_runner::modules::ModuleManager;
+use wasm_central_runner::modules::{ModuleManager, ModuleStatus};
 
 use std::vec::Vec;
 
@@ -83,16 +83,19 @@ impl Modules for MyModules {
     ) -> Result<Response<ModuleLoadReply>, Status> {
         let mut streaming = request.into_inner();
         let mut success = true;
+        let mut module_name = String::new();
         let rt_path = self.manager.lock().unwrap().watcher.dir.clone();
         if let Some(item) = streaming.message().await? {
             let full_path = rt_path.join(item.file_name.clone());
-            if let mut file = fs::File::create(full_path.clone())? {
-                file.write_all(&item.runnable_bytes[..])?;
-                while let Some(item) = streaming.message().await? {
-                    file.write_all(&item.runnable_bytes[..])?;
-                }
-                file.flush()?;
+            let mut file = fs::File::create(full_path.clone())?;
+            file.write_all(&item.runnable_bytes)?;
+            println!("!! wrote {} bytes", item.runnable_bytes.len());
+            while let Some(item) = streaming.message().await? {
+                file.write_all(&item.runnable_bytes)?;
+                println!("!! wrote {} bytes", item.runnable_bytes.len());
             }
+            file.flush()?;
+
             let inputs: String = item.inputs;
             let outputs: String = item.outputs;
             let in_arr = inputs.split(",").join("', '");
@@ -104,7 +107,8 @@ impl Modules for MyModules {
             };
 
             let file_name_part = PathBuf::from(item.file_name.clone());
-            let file_name = PathBuf::from(format!("{}.zip", file_name_part.file_stem().unwrap().to_str().unwrap()));
+            let local_name = file_name_part.file_stem().unwrap().to_str().unwrap().to_owned();
+            let file_name = PathBuf::from(format!("{}.zip", local_name));
             let zip_path = rt_path.join(file_name);
             if let Ok(mut file) = fs::File::open(full_path.clone()) {
                 if let Ok(zip_file) = fs::File::create(zip_path) {
@@ -128,6 +132,7 @@ impl Modules for MyModules {
             } else {
                 eprintln!("Cannot open WASM file to copy into zip file");
             }
+            module_name = local_name;
         } else {
             eprintln!("Cannot receive file stream");
         }
@@ -136,8 +141,15 @@ impl Modules for MyModules {
         } else {
             Some("Cannot load file".to_owned())
         };
+        self.manager.lock().unwrap().tick();
+        let map = self.manager.lock().unwrap().running_modules_map();
+        let module_status = map
+            .get(module_name.as_str())
+            .map(|i| i.status)
+            .or_else(|| Some(ModuleStatus::Undeployed))
+            .unwrap();
         let reply = ModuleLoadReply {
-            success,
+            success: success && module_status.eq(&ModuleStatus::Deploy),
             error_message,
             time: 0,
         };

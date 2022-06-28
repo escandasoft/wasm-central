@@ -1,7 +1,7 @@
 mod compiler;
 mod options;
 
-use std::fs;
+use std::{cmp, fs};
 use std::io::Read;
 use std::os::unix::fs::{FileExt, MetadataExt};
 use clap::Parser;
@@ -62,20 +62,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
                 match fs::File::open(file_path.clone()) {
                     Ok(mut file) => {
-                        let iterable = tokio_stream::iter(0..(file.metadata().unwrap().size() / 1024 + 1)).map(move |i| {
-                            let mut buffer = Vec::with_capacity(1024);
-                            let mut bytes_read = 0;
-                            while let Ok(read) = file.read(&mut buffer) {
-                                bytes_read += read;
-                                if read < 1 {
-                                    break;
-                                }
+                        let mut buffer = Vec::with_capacity(1024);
+                        file.read_to_end(&mut buffer).expect("Cannot write to buffer");
+                        let iterable = tokio_stream::iter(0..((buffer.len() / 8192) + 1)).map(move |i| {
+                            println!("!! made ModuleLoadPartRequest {}", i);
+                            let top = cmp::min(buffer.len(), (i + 1024) as usize);
+                            let range = (i as usize)..top;
+                            {
+                                let fmt = range.clone();
+                                println!("!! sending range ({}, {})", fmt.start, fmt.end);
                             }
                             ModuleLoadPartRequest {
                                 file_name: file_path.clone().file_name().unwrap().to_str().unwrap().to_owned(),
                                 inputs: inputs.clone(),
                                 outputs: outputs.clone(),
-                                runnable_bytes: buffer[0..bytes_read]
+                                runnable_bytes: buffer[range].to_vec()
                             }
                         });
                         println!("Starting to stream file to server");
