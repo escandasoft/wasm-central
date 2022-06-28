@@ -7,8 +7,6 @@ service Modules {
 
   rpc Load (stream ModuleLoadPartRequest) returns (ModuleLoadReply);
 
-  rpc Replace(ModuleReplaceRequest) returns (ModuleReplaceReply);
-
   rpc Unload (ModuleUnloadRequest) returns (ModuleUnloadReply);
 }
 
@@ -32,21 +30,10 @@ message ModuleLoadPartRequest {
   string file_name = 1;
   string inputs = 2;
   string outputs = 3;
-  bytes zip_file_bytes = 4;
+  bytes runnable_bytes = 4;
 }
 
 message ModuleLoadReply {
-  bool success = 1;
-  optional string error_message = 2;
-  int64 time = 3;
-}
-
-message ModuleReplaceRequest {
-  string file_name = 1;
-  bytes zip_file_bytes = 2;
-}
-
-message ModuleReplaceReply {
   bool success = 1;
   optional string error_message = 2;
   int64 time = 3;

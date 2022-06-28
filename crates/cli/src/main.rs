@@ -64,13 +64,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(mut file) => {
                         let iterable = tokio_stream::iter(0..(file.metadata().unwrap().size() / 1024 + 1)).map(move |i| {
                             let mut buffer = Vec::with_capacity(1024);
-                            let read = file.read_at(&mut buffer[..], i * 1024 as u64)
-                                .expect("Cannot read buffer");
+                            let mut bytes_read = 0;
+                            while let Ok(read) = file.read(&mut buffer) {
+                                bytes_read += read;
+                                if read < 1 {
+                                    break;
+                                }
+                            }
                             ModuleLoadPartRequest {
                                 file_name: file_path.clone().file_name().unwrap().to_str().unwrap().to_owned(),
                                 inputs: inputs.clone(),
                                 outputs: outputs.clone(),
-                                zip_file_bytes: buffer[0..read].to_vec()
+                                runnable_bytes: buffer[0..bytes_read]
                             }
                         });
                         println!("Starting to stream file to server");
@@ -84,7 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             },
                             Err(err) => {
-                                eprintln!("Cannot deploy because error {:?}", err);
+                                eprintln!("Cannot deploy because remote error: {:?}", err);
                             }
                         };
                     }

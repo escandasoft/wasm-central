@@ -12,10 +12,14 @@ use std::vec::Vec;
 
 use clap::Parser;
 use console::Style;
-use tonic::{transport::Server, Request, Response, Status, Streaming};
+use tonic::{transport::Server, Request, Response, Status, Streaming, Code};
 
 use std::{fs, thread};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
+use prost::Message;
+use zip::write::FileOptions;
+use iter_tools::Itertools;
 
 use crate::cli_proto::modules_server::ModulesServer;
 use crate::cli_proto::modules_server::Modules;
@@ -27,7 +31,7 @@ struct Cli {
     address: String,
     /// Port to listen to
     port: u16,
-    modules_path: std::path::PathBuf,
+    modules_path: PathBuf,
 }
 
 pub mod cli_proto {
@@ -78,59 +82,66 @@ impl Modules for MyModules {
         request: Request<Streaming<ModuleLoadPartRequest>>,
     ) -> Result<Response<ModuleLoadReply>, Status> {
         let mut streaming = request.into_inner();
-        let mut success = false;
-        let mut full_path = None;
-        let mut offset = 0 as u64;
-        while let Some(item) = streaming.message().await? {
-            let path = full_path.unwrap_or_else(|| {
-                let rel_file_path = PathBuf::from(item.file_name);
-                self.manager.lock().unwrap().watcher.dir.join(rel_file_path)
-            });
-            full_path = Some(path.clone());
-            let zip_file_bytes = item.zip_file_bytes;
-            let open_file = move || {
-                let the_path = path.clone();
-                if the_path.exists() {
-                    fs::File::open(the_path.clone())
-                } else {
-                    fs::File::create(the_path.clone())
+        let mut success = true;
+        let rt_path = self.manager.lock().unwrap().watcher.dir.clone();
+        if let Some(item) = streaming.message().await? {
+            let full_path = rt_path.join(item.file_name.clone());
+            if let mut file = fs::File::create(full_path.clone())? {
+                file.write_all(&item.runnable_bytes[..])?;
+                while let Some(item) = streaming.message().await? {
+                    file.write_all(&item.runnable_bytes[..])?;
                 }
+                file.flush()?;
+            }
+            let inputs: String = item.inputs;
+            let outputs: String = item.outputs;
+            let in_arr = inputs.split(",").join("', '");
+            let out_arr = outputs.split(",").join("', '");
+            let meta_contents = if in_arr.is_empty() {
+                format!("{{ inputs: [], outputs: [] }}")
+            } else {
+                format!("{{ inputs: ['{}'], outputs: ['{}'] }}", in_arr, out_arr)
             };
-            match open_file() {
-                Ok(mut file) => {
-                    let old_offset = offset;
-                    offset += zip_file_bytes.len() as u64;
-                    file.write_at(&zip_file_bytes[..], old_offset)
+
+            let file_name_part = PathBuf::from(item.file_name.clone());
+            let file_name = PathBuf::from(format!("{}.zip", file_name_part.file_stem().unwrap().to_str().unwrap()));
+            let zip_path = rt_path.join(file_name);
+            if let Ok(mut file) = fs::File::open(full_path.clone()) {
+                if let Ok(zip_file) = fs::File::create(zip_path) {
+                    let mut zip_writer = zip::ZipWriter::new(zip_file);
+                    if let Ok(()) = zip_writer.start_file("meta.json", FileOptions::default()) {
+                        zip_writer.write_all(&meta_contents.encode_to_vec()[..])?;
+                    } else {
+                        eprintln!("Cannot start file in zip: meta.json");
+                    }
+                    if let Ok(()) = zip_writer.start_file("runnable.wasm", FileOptions::default()) {
+                        let mut buffer = vec![];
+                        file.read_to_end(&mut buffer)?;
+                        zip_writer.write_all(&buffer)?;
+                    } else {
+                        eprintln!("Cannot start file in zip: meta.json");
+                    }
+                    if let Err(err) = zip_writer.finish() {
+                        eprintln!("Cannot finish writing zip bytes: {}", err);
+                    }
                 }
-                Err(err) => {
-                    success = false;
-                    eprintln!("Cannot open file for writing {:?}", err);
-                    Err(err)
-                }
-            }?;
-        }
-        let error_message = if !success {
-            Some(format!("Cannot load file at {}", full_path.unwrap().display()))
+            } else {
+                eprintln!("Cannot open WASM file to copy into zip file");
+            }
         } else {
+            eprintln!("Cannot receive file stream");
+        }
+        let error_message = if success {
             None
+        } else {
+            Some("Cannot load file".to_owned())
         };
         let reply = ModuleLoadReply {
-            success: !success,
+            success,
             error_message,
             time: 0,
         };
         Ok(Response::new(reply))
-    }
-
-    async fn replace(
-        &self,
-        request: Request<ModuleReplaceRequest>,
-    ) -> Result<Response<ModuleReplaceReply>, Status> {
-        return Ok(Response::new(ModuleReplaceReply {
-            success: false,
-            error_message: None,
-            time: 0,
-        }));
     }
 
     async fn unload(

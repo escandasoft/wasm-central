@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::data::DataFrame;
 
 use fork::Fork;
@@ -5,7 +6,7 @@ use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmer::InstantiationError::{HostEnvInitialization, Link, Start};
-use wasmer::{Cranelift, Instance, Module, Store, Universal, UniversalEngine};
+use wasmer::{CompileError, Cranelift, Instance, Module, Store, Universal, UniversalEngine};
 use wasmer_wasi::WasiState;
 
 #[derive(Clone)]
@@ -36,14 +37,18 @@ impl Compiler {
         reader
             .read_to_end(&mut buff)
             .expect("Cannot use reader during compilation");
-        let module_result = Module::new(&self.store, buff);
-        let compilation_unit = CompilationUnit {
-            module: module_result.unwrap(),
-        };
-        if let Some(validation_error) = get_validation_errors(&compilation_unit) {
-            Err(validation_error)
-        } else {
-            Ok(compilation_unit)
+        match Module::new(&self.store, buff) {
+            Ok(module) => {
+                let compilation_unit = CompilationUnit {
+                    module,
+                };
+                if let Some(validation_error) = get_validation_errors(&compilation_unit) {
+                    Err(validation_error)
+                } else {
+                    Ok(compilation_unit)
+                }
+            }
+            Err(error) => Err(format!("{:?}", error))
         }
     }
 }
