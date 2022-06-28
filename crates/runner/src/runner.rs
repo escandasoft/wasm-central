@@ -64,7 +64,8 @@ fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
                 Some("Cannot find `handle_error' in executable".to_string())
             } else {
                 None
-            }
+            };
+            None
         }
         Err(error) => Some(format!("Cannot create instance because error: {}", error)),
     }
