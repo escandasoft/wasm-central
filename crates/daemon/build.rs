@@ -1,4 +1,4 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::compile_protos("../../proto/cli.proto")?;
+    tonic_build::compile_protos("../../proto/modules.proto")?;
     Ok(())
 }
