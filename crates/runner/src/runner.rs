@@ -38,16 +38,14 @@ impl Compiler {
             .expect("Cannot use reader during compilation");
         match Module::new(&self.store, buff) {
             Ok(module) => {
-                let compilation_unit = CompilationUnit {
-                    module,
-                };
+                let compilation_unit = CompilationUnit { module };
                 if let Some(validation_error) = get_validation_errors(&compilation_unit) {
                     Err(validation_error)
                 } else {
                     Ok(compilation_unit)
                 }
             }
-            Err(error) => Err(format!("{:?}", error))
+            Err(error) => Err(format!("{:?}", error)),
         }
     }
 }

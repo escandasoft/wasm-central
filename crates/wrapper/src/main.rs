@@ -1,10 +1,10 @@
 mod engine;
 
+use quickjs_wasm_rs::{json, Context, Value};
 use std::fs;
-use quickjs_wasm_rs::{Context, Value, json};
 
 use once_cell::sync::OnceCell;
-use std::io::{self, Read, stderr};
+use std::io::{self, stderr, Read};
 
 #[cfg(not(test))]
 #[global_allocator]

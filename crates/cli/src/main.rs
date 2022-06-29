@@ -1,10 +1,10 @@
 mod compiler;
 mod options;
 
-use std::{cmp, fs};
-use std::io::Read;
 use clap::Parser;
 use options::{Args, ModuleCommands};
+use std::io::Read;
+use std::{cmp, fs};
 
 use tokio_stream::StreamExt;
 use tonic::IntoStreamingRequest;
@@ -41,7 +41,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ModuleCommands::Compile {
                 input_file,
                 output_file,
-
             } => {
                 compiler::compile(&input_file, &output_file);
             }
@@ -50,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 port,
                 file_path,
                 inputs,
-                outputs
+                outputs,
             } => {
                 let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
                     .await
@@ -59,33 +58,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(mut file) => {
                         const BUFFER_SIZE: usize = 1024 * 1024;
                         let mut buffer = vec![];
-                        file.read_to_end(&mut buffer).expect("Cannot write to buffer");
-                        let iterable = tokio_stream::iter(0..((buffer.len() / BUFFER_SIZE) + 1)).map(move |i| {
-                            let offset = i * BUFFER_SIZE;
-                            println!("!! made ModuleLoadPartRequest {}", i);
-                            let top = cmp::min(buffer.len(), offset + BUFFER_SIZE);
-                            let range = offset..top;
-                            {
-                                let fmt = range.clone();
-                                println!("!! sending range ({}, {})", fmt.start, fmt.end);
-                            }
-                            ModuleLoadPartRequest {
-                                file_name: file_path.clone().file_name().unwrap().to_str().unwrap().to_owned(),
-                                inputs: inputs.clone(),
-                                outputs: outputs.clone(),
-                                runnable_bytes: buffer[range].to_vec()
-                            }
-                        });
+                        file.read_to_end(&mut buffer)
+                            .expect("Cannot write to buffer");
+                        let iterable = tokio_stream::iter(0..((buffer.len() / BUFFER_SIZE) + 1))
+                            .map(move |i| {
+                                let offset = i * BUFFER_SIZE;
+                                println!("!! made ModuleLoadPartRequest {}", i);
+                                let top = cmp::min(buffer.len(), offset + BUFFER_SIZE);
+                                let range = offset..top;
+                                {
+                                    let fmt = range.clone();
+                                    println!("!! sending range ({}, {})", fmt.start, fmt.end);
+                                }
+                                ModuleLoadPartRequest {
+                                    file_name: file_path
+                                        .clone()
+                                        .file_name()
+                                        .unwrap()
+                                        .to_str()
+                                        .unwrap()
+                                        .to_owned(),
+                                    inputs: inputs.clone(),
+                                    outputs: outputs.clone(),
+                                    runnable_bytes: buffer[range].to_vec(),
+                                }
+                            });
                         println!("Starting to stream file to server");
                         match client.load(iterable).await {
                             Ok(response) => {
                                 let response = response.into_inner();
                                 if !response.success {
-                                    eprintln!("Cannot deploy because {}", response.error_message.unwrap_or("unknown".to_owned()));
+                                    eprintln!(
+                                        "Cannot deploy because {}",
+                                        response.error_message.unwrap_or("unknown".to_owned())
+                                    );
                                 } else {
                                     println!("Successfully deployed to server");
                                 }
-                            },
+                            }
                             Err(err) => {
                                 eprintln!("Cannot deploy because remote error: {:?}", err);
                             }

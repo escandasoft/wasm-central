@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::iter::Iterator;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wasm_central_runner::modules::{ModuleManager, ModuleStatus};
@@ -10,14 +10,14 @@ use clap::Parser;
 use console::Style;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 
-use std::{fs, thread};
-use std::io::{Read, Write};
-use prost::Message;
-use zip::write::FileOptions;
 use iter_tools::Itertools;
+use prost::Message;
+use std::io::{Read, Write};
+use std::{fs, thread};
+use zip::write::FileOptions;
 
-use crate::fn_proto::modules_server::ModulesServer;
 use crate::fn_proto::modules_server::Modules;
+use crate::fn_proto::modules_server::ModulesServer;
 use crate::fn_proto::*;
 
 #[derive(Parser)]
@@ -39,15 +39,16 @@ pub struct MyModules {
 
 impl MyModules {
     pub fn new(manager: Arc<Mutex<ModuleManager>>) -> MyModules {
-        MyModules {
-            manager,
-        }
+        MyModules { manager }
     }
 }
 
 #[tonic::async_trait]
 impl Modules for MyModules {
-    async fn list(&self, request: Request<ModuleListRequest>) -> Result<Response<ModuleListReply>, Status> {
+    async fn list(
+        &self,
+        request: Request<ModuleListRequest>,
+    ) -> Result<Response<ModuleListReply>, Status> {
         let items = self
             .manager
             .lock()
@@ -102,7 +103,12 @@ impl Modules for MyModules {
             };
 
             let file_name_part = PathBuf::from(item.file_name.clone());
-            let local_name = file_name_part.file_stem().unwrap().to_str().unwrap().to_owned();
+            let local_name = file_name_part
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned();
             let file_name = PathBuf::from(format!("{}.zip", local_name));
             let zip_path = rt_path.join(file_name);
             if let Ok(mut file) = fs::File::open(full_path.clone()) {
@@ -185,11 +191,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Server ready at {}", blue.apply_to(faddr));
 
     let mgr = Arc::clone(&mgr);
-    thread::spawn(move || {
-        loop {
-            mgr.lock().unwrap().tick();
-            thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
-        }
+    thread::spawn(move || loop {
+        mgr.lock().unwrap().tick();
+        thread::sleep(Duration::from_millis(MODULE_MANAGER_LOOP_WAIT));
     });
     bootstrap_future.await?;
     return Ok(());

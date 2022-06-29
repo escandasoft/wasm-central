@@ -49,3 +49,20 @@ message ModuleUnloadReply {
   string unloaded_module_name = 3;
   int64 time = 4;
 }
+
+service Subscriber {
+  rpc Subscribe(stream Topic) returns (stream TopicResult);
+}
+
+message Topic {
+  repeated string topic_names = 1;
+}
+
+message TopicResult {
+  repeated TopicMessage messages = 1;
+}
+
+message TopicMessage {
+  bytes key = 1;
+  bytes value = 2;
+}
