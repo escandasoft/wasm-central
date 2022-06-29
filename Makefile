@@ -4,7 +4,7 @@
 download-wasi-sdk:
 	./install_wasi_sdk.sh
 
-all: wrapper cli runner daemon mediator
+all: schema wrapper cli runner daemon mediator
 
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
@@ -26,6 +26,11 @@ mediator:
 	cd crates/mediator \
 		&& cargo build --release \
 		&& cd -
+
+schema:
+	cd crates/schema \
+	       	&& cargo build --release \
+       		&& cd -
 
 test-runner:
 		cd crates/runner \

@@ -6,10 +6,6 @@ pub mod fn_proto {
     tonic::include_proto!("fn_proto");
 }
 
-pub mod ipc_proto {
-    tonic::include_proto!("ipc_proto");
-}
-
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {

@@ -42,7 +42,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         copy_engine_binary();
     }
     tonic_build::compile_protos("../../proto/fn.proto")?;
-    tonic_build::compile_protos("../../proto/ipc.proto")?;
-    tonic_build::compile_protos("../../proto/queue.proto")?;
     Ok(())
 }

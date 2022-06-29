@@ -1,7 +1,0 @@
-syntax = "proto3";
-
-package ipc_proto;
-
-message JsRuntimePayload {
-  string script = 1;
-}
