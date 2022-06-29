@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use crate::data::DataFrame;
 
 use fork::Fork;
@@ -6,7 +5,7 @@ use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmer::InstantiationError::{HostEnvInitialization, Link, Start};
-use wasmer::{CompileError, Cranelift, Instance, Module, Store, Universal, UniversalEngine};
+use wasmer::{Cranelift, Instance, Module, Store, Universal, UniversalEngine};
 use wasmer_wasi::WasiState;
 
 #[derive(Clone)]

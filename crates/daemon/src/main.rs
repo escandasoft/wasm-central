@@ -1,9 +1,5 @@
-use std::borrow::BorrowMut;
-use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
-use std::ptr::null_mut;
-use std::rc::Rc;
-use std::iter::{Iterator, zip};
+use std::iter::Iterator;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wasm_central_runner::modules::{ModuleManager, ModuleStatus};
@@ -12,11 +8,10 @@ use std::vec::Vec;
 
 use clap::Parser;
 use console::Style;
-use tonic::{transport::Server, Request, Response, Status, Streaming, Code};
+use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 use std::{fs, thread};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::FileExt;
+use std::io::{Read, Write};
 use prost::Message;
 use zip::write::FileOptions;
 use iter_tools::Itertools;
@@ -82,7 +77,7 @@ impl Modules for MyModules {
         request: Request<Streaming<ModuleLoadPartRequest>>,
     ) -> Result<Response<ModuleLoadReply>, Status> {
         let mut streaming = request.into_inner();
-        let mut success = true;
+        let success = true;
         let mut module_name = String::new();
         let rt_path = self.manager.lock().unwrap().watcher.dir.clone();
         if let Some(item) = streaming.message().await? {
