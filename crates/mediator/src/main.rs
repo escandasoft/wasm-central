@@ -53,7 +53,7 @@ struct MySubscriber {
 
 #[async_trait]
 impl Subscriber for MySubscriber {
-    type SubscribeStream = Pin<Box<dyn Stream<Item = Result<TopicResult, Status>> + Send>>;
+    type SubscribeStream = Pin<Box<dyn Stream<Item=Result<TopicResult, Status>> + Send>>;
 
     async fn subscribe(
         &self,
@@ -64,8 +64,8 @@ impl Subscriber for MySubscriber {
             .create()
             .map_err(|err| Status::new(Code::Internal, "Cannot create consumer"))?;
         let mut consumer = Mutex::new(consumer);
-        let inner_stream = tokio_stream::iter(0..).map(|_i| async move {
-            let message_sets = consumer.lock()?.poll();
+        let inner_stream = tokio_stream::iter(0..).map(move |_i| {
+            let message_sets = consumer.lock().unwrap().poll();
             let mut messages = vec![];
             for mss in message_sets {
                 for ms in mss.iter() {
@@ -75,36 +75,16 @@ impl Subscriber for MySubscriber {
                             value: m.value.to_vec(),
                         });
                     }
-                    consumer.lock().unwrap().consume_messageset(ms)?;
+                    if let Err(err) = consumer.lock().unwrap().consume_messageset(ms) {
+                        eprintln!("Cannot consume message set");
+                        return Err(Status::new(Code::Internal, "Cannot consume message set"));
+                    }
                 }
             }
             Ok(TopicResult { messages })
         });
         let mut stream = Box::pin(inner_stream);
-
-        // spawn and channel are required if you want handle "disconnect" functionality
-        // the `out_stream` will not be polled after client disconnect
-        let (tx, rx) = mpsc::channel(128);
-        tokio::spawn(async move {
-            while let item = stream.next().await.unwrap().await? {
-                match tx.send(Result::<_, Status>::Ok(item)).await {
-                    Ok(item) => {
-                        // item (server response) was queued to be send to client
-                    }
-                    Err(_item) => {
-                        // output_stream was build from rx and both are dropped
-                        break;
-                    }
-                }
-            }
-            println!("\tclient disconnected");
-            Ok(())
-        });
-
-        let output_stream = ReceiverStream::new(rx);
-        Ok(Response::new(
-            Box::pin(output_stream) as Self::SubscribeStream
-        ))
+        Ok(Response::new(stream as Self::SubscribeStream))
     }
 }
 
