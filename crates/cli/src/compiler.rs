@@ -7,7 +7,7 @@ use wizer::Wizer;
 
 const WASM: &'static [u8] = include_bytes!(concat!(env!("OUT_DIR"), "/wasm-central-wrapper.wasm"));
 
-pub fn compile(base: &PathBuf, input_file: &PathBuf, output_file: &PathBuf) -> () {
+pub fn compile(input_file: &PathBuf, output_file: &PathBuf) -> () {
     match fs::File::open(input_file) {
         Ok(mut file) => unsafe {
             let mut file_buffer = vec![];

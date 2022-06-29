@@ -16,9 +16,9 @@ use prost::Message;
 use zip::write::FileOptions;
 use iter_tools::Itertools;
 
-use crate::cli_proto::modules_server::ModulesServer;
-use crate::cli_proto::modules_server::Modules;
-use crate::cli_proto::*;
+use crate::fn_proto::modules_server::ModulesServer;
+use crate::fn_proto::modules_server::Modules;
+use crate::fn_proto::*;
 
 #[derive(Parser)]
 struct Cli {
@@ -29,8 +29,8 @@ struct Cli {
     modules_path: PathBuf,
 }
 
-pub mod cli_proto {
-    tonic::include_proto!("cli_proto");
+pub mod fn_proto {
+    tonic::include_proto!("fn_proto");
 }
 
 pub struct MyModules {

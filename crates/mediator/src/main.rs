@@ -2,6 +2,10 @@ use std::collections::HashMap;
 use clap::Parser;
 use clap::Subcommand;
 
+pub mod fn_proto {
+    tonic::include_proto!("fn_proto");
+}
+
 pub mod ipc_proto {
     tonic::include_proto!("ipc_proto");
 }

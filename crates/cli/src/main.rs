@@ -3,21 +3,17 @@ mod options;
 
 use std::{cmp, fs};
 use std::io::Read;
-use std::os::unix::fs::{FileExt, MetadataExt};
 use clap::Parser;
 use options::{Args, ModuleCommands};
 
-use tonic::Request;
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::StreamExt;
 use tonic::IntoStreamingRequest;
-use tonic::Streaming;
-use tokio_stream::FromStream;
 
-use crate::cli_proto::modules_client::ModulesClient;
-use crate::cli_proto::*;
+use crate::fn_proto::modules_client::ModulesClient;
+use crate::fn_proto::*;
 
-pub mod cli_proto {
-    tonic::include_proto!("cli_proto");
+pub mod fn_proto {
+    tonic::include_proto!("fn_proto");
 }
 
 #[tokio::main]
@@ -43,12 +39,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             ModuleCommands::Compile {
-                base,
                 input_file,
                 output_file,
 
             } => {
-                compiler::compile(&base, &input_file, &output_file);
+                compiler::compile(&input_file, &output_file);
             }
             ModuleCommands::Deploy {
                 host,

@@ -35,9 +35,6 @@ pub enum ModuleCommands {
     },
     Compile {
         #[clap(short, long)]
-        base: std::path::PathBuf,
-
-        #[clap(short, long)]
         input_file: std::path::PathBuf,
 
         #[clap(short, long)]

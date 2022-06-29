@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package cli_proto;
+package fn_proto;
 
 service Modules {
   rpc List (ModuleListRequest) returns (ModuleListReply);
