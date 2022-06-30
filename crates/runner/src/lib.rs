@@ -1,4 +1,4 @@
 pub mod data;
-pub mod modules;
+pub mod functions;
 pub mod runner;
 pub mod watcher;

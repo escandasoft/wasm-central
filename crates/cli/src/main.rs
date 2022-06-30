@@ -9,7 +9,7 @@ use std::{cmp, fs};
 use tokio_stream::StreamExt;
 use tonic::IntoStreamingRequest;
 
-use crate::fn_proto::modules_client::ModulesClient;
+use crate::fn_proto::functions_client::FunctionsClient;
 use crate::fn_proto::*;
 
 pub mod fn_proto {
@@ -23,10 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(command) = args.command {
         match command {
             ModuleCommands::List { host, port } => {
-                let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
+                let mut client = FunctionsClient::connect(format!("http://{}:{}", host, port))
                     .await
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
-                match client.list(ModuleListRequest {}).await {
+                match client.list(FunctionListRequest {}).await {
                     Ok(response) => {
                         let reply = response.into_inner();
                         println!("Found {} modules", reply.item_no);
@@ -51,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 inputs,
                 outputs,
             } => {
-                let mut client = ModulesClient::connect(format!("http://{}:{}", host, port))
+                let mut client = FunctionsClient::connect(format!("http://{}:{}", host, port))
                     .await
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
                 match fs::File::open(file_path.clone()) {
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let fmt = range.clone();
                                     println!("!! sending range ({}, {})", fmt.start, fmt.end);
                                 }
-                                ModuleLoadPartRequest {
+                                FunctionLoadPartRequest {
                                     file_name: file_path
                                         .clone()
                                         .file_name()

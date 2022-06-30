@@ -1,4 +1,4 @@
-use wasm_central_runner::modules::ModuleManager;
+use wasm_central_runner::functions::FunctionManager;
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ fn test_executor_basics() {
     let _ = fs::remove_dir_all(rt_path.clone());
     fs::create_dir(rt_path.clone()).expect("Cannot create directory for runtime modules");
 
-    let mut module_manager = ModuleManager::new(rt_path.clone());
+    let mut module_manager = FunctionManager::new(rt_path.clone());
 
     let module_path = rt_path.join("./module.zip");
     fs::copy(full_path.clone(), module_path.clone())

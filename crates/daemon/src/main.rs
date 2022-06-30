@@ -2,7 +2,7 @@ use std::iter::Iterator;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use wasm_central_runner::modules::{ModuleManager, ModuleStatus};
+use wasm_central_runner::functions::{FunctionManager, FunctionStatus};
 
 use std::vec::Vec;
 
@@ -16,8 +16,8 @@ use std::io::{Read, Write};
 use std::{fs, thread};
 use zip::write::FileOptions;
 
-use crate::fn_proto::modules_server::Modules;
-use crate::fn_proto::modules_server::ModulesServer;
+use crate::fn_proto::functions_server::Functions;
+use crate::fn_proto::functions_server::FunctionsServer;
 use crate::fn_proto::*;
 
 #[derive(Parser)]
@@ -33,22 +33,22 @@ pub mod fn_proto {
     tonic::include_proto!("fn_proto");
 }
 
-pub struct MyModules {
-    manager: Arc<Mutex<ModuleManager>>,
+pub struct MyFunctions {
+    manager: Arc<Mutex<FunctionManager>>,
 }
 
-impl MyModules {
-    pub fn new(manager: Arc<Mutex<ModuleManager>>) -> MyModules {
-        MyModules { manager }
+impl MyFunctions {
+    pub fn new(manager: Arc<Mutex<FunctionManager>>) -> MyFunctions {
+        MyFunctions { manager }
     }
 }
 
 #[tonic::async_trait]
-impl Modules for MyModules {
+impl Functions for MyFunctions {
     async fn list(
         &self,
-        request: Request<ModuleListRequest>,
-    ) -> Result<Response<ModuleListReply>, Status> {
+        request: Request<FunctionListRequest>,
+    ) -> Result<Response<FunctionListReply>, Status> {
         let items = self
             .manager
             .lock()
@@ -57,7 +57,7 @@ impl Modules for MyModules {
             .iter()
             .map(|loaded_module| {
                 let module_status = loaded_module.status;
-                ModuleListReplyItem {
+                FunctionListReplyItem {
                     name: String::from(&loaded_module.name),
                     status: module_status.as_string(),
                     successes: 0,
@@ -66,8 +66,8 @@ impl Modules for MyModules {
                     fail_rate_per_minute: 0.0,
                 }
             })
-            .collect::<Vec<ModuleListReplyItem>>();
-        Ok(Response::new(ModuleListReply {
+            .collect::<Vec<FunctionListReplyItem>>();
+        Ok(Response::new(FunctionListReply {
             items: items.clone(),
             item_no: items.len() as i32,
         }))
@@ -75,8 +75,8 @@ impl Modules for MyModules {
 
     async fn load(
         &self,
-        request: Request<Streaming<ModuleLoadPartRequest>>,
-    ) -> Result<Response<ModuleLoadReply>, Status> {
+        request: Request<Streaming<FunctionLoadPartRequest>>,
+    ) -> Result<Response<FunctionLoadReply>, Status> {
         let mut streaming = request.into_inner();
         let success = true;
         let mut module_name = String::new();
@@ -147,10 +147,10 @@ impl Modules for MyModules {
         let module_status = map
             .get(module_name.as_str())
             .map(|i| i.status)
-            .or_else(|| Some(ModuleStatus::Undeployed))
+            .or_else(|| Some(FunctionStatus::Undeployed))
             .unwrap();
-        let reply = ModuleLoadReply {
-            success: success && module_status.eq(&ModuleStatus::Deploy),
+        let reply = FunctionLoadReply {
+            success: success && module_status.eq(&FunctionStatus::Deploy),
             error_message,
             time: 0,
         };
@@ -159,9 +159,9 @@ impl Modules for MyModules {
 
     async fn unload(
         &self,
-        request: Request<ModuleUnloadRequest>,
-    ) -> Result<Response<ModuleUnloadReply>, Status> {
-        return Ok(Response::new(ModuleUnloadReply {
+        request: Request<FunctionUnloadRequest>,
+    ) -> Result<Response<FunctionUnloadReply>, Status> {
+        return Ok(Response::new(FunctionUnloadReply {
             success: false,
             error_message: None,
             unloaded_module_name: String::from("proc"),
@@ -184,9 +184,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let blue = Style::new().blue();
 
-    let mgr = Arc::new(Mutex::new(ModuleManager::new(path.clone())));
+    let mgr = Arc::new(Mutex::new(FunctionManager::new(path.clone())));
 
-    let modules_server = ModulesServer::new(MyModules::new(mgr.clone()));
+    let modules_server = FunctionsServer::new(MyFunctions::new(mgr.clone()));
     let bootstrap_future = Server::builder().add_service(modules_server).serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
 

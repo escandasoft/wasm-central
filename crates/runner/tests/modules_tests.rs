@@ -1,4 +1,4 @@
-use wasm_central_runner::modules::ModuleManager;
+use wasm_central_runner::functions::FunctionManager;
 
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +13,7 @@ fn test_file_handling() -> Result<(), std::io::Error> {
     fs::remove_dir_all(rt_path.clone())?;
     fs::create_dir(rt_path.clone())?;
 
-    let mut module_manager = ModuleManager::new(rt_path.clone());
+    let mut module_manager = FunctionManager::new(rt_path.clone());
 
     module_manager.tick();
     assert_eq!(0, module_manager.running_modules().len());
