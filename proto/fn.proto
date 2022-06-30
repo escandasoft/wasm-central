@@ -96,6 +96,10 @@ message Field {
   string type = 2;
 }
 
+message Schema {
+  repeated Field fields = 1;
+}
+
 service Schemas {
   rpc SaveSchema(SaveRequest) returns (SaveSchemaResponse);
 }

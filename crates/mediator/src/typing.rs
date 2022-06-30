@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use kafka::client::KafkaClient;
 
+#[derive(Clone)]
 pub enum Schema {
     Root(String, Vec<Schema>),
     Record(String, Vec<Schema>),
     Field(String, String),
+    RECORD_END
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -18,24 +20,42 @@ pub struct TypingId {
     pub kind: TypingKind,
 }
 
-trait SchemaWriter<R, F>
-where
-    R: FnOnce(Schema) -> (),
-    F: FnOnce(Schema) -> ()
+type ObjectReader = dyn Iterator<Item=Schema>;
+
+trait SchemaWriter
 {
-    fn write_record(&self, name: String, record: Schema, value: R);
-    fn write_field(&self, name: String, field: Schema, field: F);
+    fn write_record(&self, name: String, record: Schema, reader: &ObjectReader);
+    fn write_field(&self, name: String, field: Schema, reader: &ObjectReader);
     fn end_record(&self);
 }
 
-struct TypingAdapter;
+trait TypingAdapter {
+    fn adapt(&mut self, typing: Typing, reader: &ObjectReader, writer: &dyn SchemaWriter) {
+        self.write(&typing.schema, reader, writer);
+    }
 
-impl TypingAdapter {
-    pub fn adapt<R, F>(&mut self, typing: &Typing, writer: &dyn SchemaWriter<R, F>) {
-
+    fn write(&mut self, schema: &Schema, reader: &ObjectReader, writer: &dyn SchemaWriter) {
+        match schema {
+            Schema::Root(name, records) => {
+                writer.write_record(name.clone(), schema.clone(), reader);
+            }
+            Schema::Record(name, fields) => {
+                writer.write_record(name.clone(), schema.clone(), reader);
+                for field in fields {
+                    self.write(field, reader, writer);
+                }
+            }
+            Schema::Field(name, typing) => {
+                writer.write_field(name.clone(), schema.clone(), reader);
+            }
+            Schema::RECORD_END => {
+                writer.end_record()
+            }
+        }
     }
 }
 
+#[derive(Clone)]
 pub struct Typing {
     pub schema: Schema
 }
