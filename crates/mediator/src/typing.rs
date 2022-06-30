@@ -6,7 +6,7 @@ pub enum Schema {
     Root(String, Vec<Schema>),
     Record(String, Vec<Schema>),
     Field(String, String),
-    RECORD_END
+    RecordEnd(())
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -22,8 +22,7 @@ pub struct TypingId {
 
 type ObjectReader = dyn Iterator<Item=Schema>;
 
-trait SchemaWriter
-{
+trait SchemaWriter {
     fn write_record(&self, name: String, record: Schema, reader: &ObjectReader);
     fn write_field(&self, name: String, field: Schema, reader: &ObjectReader);
     fn end_record(&self);
@@ -48,7 +47,7 @@ trait TypingAdapter {
             Schema::Field(name, typing) => {
                 writer.write_field(name.clone(), schema.clone(), reader);
             }
-            Schema::RECORD_END => {
+            Schema::RecordEnd(()) => {
                 writer.end_record()
             }
         }
