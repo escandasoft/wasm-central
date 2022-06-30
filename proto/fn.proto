@@ -59,12 +59,13 @@ message Topic {
 }
 
 message TopicResult {
-  repeated TopicMessage messages = 1;
+  repeated TopicMessage messages = 2;
 }
 
 message TopicMessage {
-  bytes key = 1;
-  bytes value = 2;
+  string topic = 1;
+  bytes key = 2;
+  bytes value = 3;
 }
 
 service Executor {
@@ -73,11 +74,16 @@ service Executor {
 
 message ExecuteRequest {
   string module_name = 1;
-  Payload payload = 2;
+  string input = 2;
+  string output = 3;
+  Schema input_schema = 4;
+  Schema output_schema = 5;
+  bytes body = 6;
 }
 
 message ExecuteResponse {
-  Payload payload = 3;
+  Schema schema = 1;
+  bytes body = 2;
 }
 
 message Record {
@@ -92,12 +98,4 @@ message Field {
 
 message Schema {
   repeated Record record_types = 1;
-}
-
-message Payload {
-  string input = 1;
-  string output = 2;
-  Schema input_schema = 3;
-  Schema output_schema = 4;
-  bytes body = 5;
 }

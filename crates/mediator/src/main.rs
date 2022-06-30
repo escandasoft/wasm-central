@@ -5,10 +5,12 @@ use clap::Subcommand;
 use kafka::Error;
 use std::collections::HashMap;
 use std::iter::FromFn;
+use std::net::ToSocketAddrs;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::{LockResult, Mutex};
 use std::time::Duration;
+use console::Style;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::{iter, Stream, StreamExt};
@@ -42,11 +44,28 @@ pub struct Args {
 
     #[clap(short = 'f', long = "fn-port")]
     pub fn_port: i16,
+
+    pub host: String,
+
+    pub port: i16,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let blue = Style::new().blue();
+
     let args = Args::parse();
+
+    let faddr = format!("{}:{}", args.host, args.port).to_socket_addrs()
+        .expect("valid listen address").next().expect("valid socket object");
     let hosts = [format!("{}::{}", args.kafka_host, args.kafka_port)];
+
+    let subscriber = MySubscriber { hosts: hosts.to_vec() };
+    let subscriber_service = SubscriberServer::new(subscriber);
+    let bootstrap_future = Server::builder()
+        .add_service(subscriber_service)
+        .serve(faddr);
+    println!("Server ready at {}", blue.apply_to(faddr));
+    bootstrap_future.await?;
     Ok(())
 }

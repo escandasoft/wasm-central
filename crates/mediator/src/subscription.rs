@@ -3,10 +3,12 @@ use clap::Subcommand;
 use kafka::Error;
 use std::collections::HashMap;
 use std::iter::FromFn;
+use std::io::ErrorKind;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::{LockResult, Mutex};
 use std::time::Duration;
+use kafka::consumer::Consumer;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::{iter, Stream, StreamExt};
@@ -33,31 +35,47 @@ impl Subscriber for MySubscriber {
         &self,
         request: tonic::Request<tonic::Streaming<Topic>>,
     ) -> Result<tonic::Response<Self::SubscribeStream>, tonic::Status> {
-        let topic = request.into_inner();
-        let consumer = kafka::consumer::Consumer::from_hosts(self.hosts.clone())
-            .create()
-            .map_err(|err| Status::new(Code::Internal, "Cannot create consumer"))?;
-        let mut consumer = Mutex::new(consumer);
-        let inner_stream = tokio_stream::iter(0..).map(move |_i| {
-            let message_sets = consumer.lock().unwrap().poll();
-            let mut messages = vec![];
-            for mss in message_sets {
-                for ms in mss.iter() {
-                    for m in ms.messages() {
-                        messages.push(TopicMessage {
-                            key: m.key.to_vec(),
-                            value: m.value.to_vec(),
-                        });
-                    }
-                    if let Err(err) = consumer.lock().unwrap().consume_messageset(ms) {
-                        eprintln!("Cannot consume message set");
-                        return Err(Status::new(Code::Internal, "Cannot consume message set"));
+        let mut in_stream = request.into_inner();
+
+        let (tx, rx) = mpsc::channel(128);
+
+        let hosts = self.hosts.clone();
+        tokio::spawn(async move {
+            let mut builder = Consumer::from_hosts(hosts);
+            if let Some(Ok(topic)) = in_stream.next().await {
+                for topic in topic.topic_names {
+                    builder = builder.with_topic(topic);
+                }
+                if let Ok(mut consumer) = builder.create() {
+                    while let Ok(message_sets) = consumer.poll() {
+                        let mut messages = vec![];
+                        for mss in message_sets.iter() {
+                            for m in mss.messages() {
+                                messages.push(TopicMessage {
+                                    topic: mss.topic().to_string(),
+                                    key: m.key.to_vec(),
+                                    value: m.value.to_vec(),
+                                });
+                            }
+                            if let Err(err) = consumer.consume_messageset(mss) {
+                                eprintln!("Cannot consume message set");
+                                return Err(Status::new(Code::Internal, "Cannot consume message set"));
+                            }
+                        }
+                        tx.send(Ok(TopicResult { messages }))
+                            .await
+                            .map_err(|err| Status::internal("Cannot send to remote thread item"))?;
                     }
                 }
             }
-            Ok(TopicResult { messages })
+            Ok(())
         });
-        let mut stream = Box::pin(inner_stream);
-        Ok(Response::new(stream as Self::SubscribeStream))
+
+        // echo just write the same data that was received
+        let out_stream = ReceiverStream::new(rx);
+
+        Ok(Response::new(
+            Box::pin(out_stream) as Self::SubscribeStream
+        ))
     }
 }
