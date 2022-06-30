@@ -69,7 +69,7 @@ message TopicMessage {
 }
 
 service Executor {
-  rpc execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
 }
 
 message ExecuteRequest {
@@ -96,6 +96,20 @@ message Field {
   string type = 2;
 }
 
-message Schema {
+service Schemas {
+  rpc SaveSchema(SaveRequest) returns (SaveSchemaResponse);
+}
+
+message SaveSchemaResponse {
+  bool success = 1;
+  enum ErrorCode {
+    IO_ERROR = 0;
+    VALIDATION_ERROR = 1;
+  }
+  ErrorCode error_code = 2;
+  optional string error_message = 3;
+}
+
+message SaveRequest {
   repeated Record record_types = 1;
 }

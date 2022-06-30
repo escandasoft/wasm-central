@@ -1,4 +1,5 @@
 mod subscription;
+mod typing;
 
 use clap::Parser;
 use clap::Subcommand;
