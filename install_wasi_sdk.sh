@@ -31,4 +31,7 @@ if [[ ! -d $PATH_TO_SDK ]]; then
     fi
     mkdir $PATH_TO_SDK
     tar xf $TMPGZ -C $PATH_TO_SDK --strip-components=1
+else
+  echo "Cannot write to SDK path at $PATH_TO_SDK" 1>&2
+  exit 2
 fi

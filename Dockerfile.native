@@ -1,0 +1,17 @@
+FROM rust:buster as builder
+RUN apt-get update -y
+RUN apt-get upgrade -y
+RUN apt-get install -y build-essential cmake cmake-extras clang-11
+WORKDIR /usr/src/wasm-central
+COPY . .
+RUN make clean-cargo clean-wasi-sdk
+RUN make download-wasi-sdk
+RUN rustup target add wasm32-wasi
+RUN make all
+
+FROM debian:buster-slim
+RUN apt-get update && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /usr/src/wasm-central/target/release/wasm-central-daemon /usr/local/bin/wasm-central-daemon
+COPY --from=builder /usr/src/wasm-central/target/release/wasm-central-cli /usr/local/bin/wasm-central-cli
+COPY ./rt.sh .
+ENTRYPOINT ["rt.sh"]

@@ -27,6 +27,14 @@ test-runner:
 				&& cargo test -- --nocapture \
 				&& cd -
 
+docker-native:
+	docker build . -f ./Dockerfile.native
+
+docker-managed:
+	docker build . -f ./Dockerfile.managed
+
+docker: docker-native docker-managed
+
 tests: test-runner
 
 fmt: fmt-cli fmt-daemon fmt-runner fmt-wrapper
@@ -61,10 +69,13 @@ fmt-mediator:
 				&& cargo clippy --target=wasm32-wasi -- -D warnings \
 				&& cd -
 
-clean: clean-wasi-sdk clean-cargo
+clean: clean-wasi-sdk clean-cargo clean-mediator
 
 clean-cargo:
 		cargo clean
 
 clean-wasi-sdk:
 		rm -r crates/wrapper/wasi-sdk 2> /dev/null || true
+
+clean-mediator:
+	cd mediator && mvn clean
