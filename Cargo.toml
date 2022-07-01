@@ -4,5 +4,4 @@ members = [
     "crates/wrapper",
     "crates/daemon",
     "crates/cli",
-    "crates/mediator",
 ]

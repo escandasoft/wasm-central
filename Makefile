@@ -1,10 +1,10 @@
-.PHONY: cli wrapper daemon runner mediator
+.PHONY: cli wrapper daemon runner
 .DEFAULT_GOAL := all
 
 download-wasi-sdk:
 	./install_wasi_sdk.sh
 
-all: wrapper cli runner daemon mediator
+all: wrapper cli runner daemon
 
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
@@ -19,11 +19,6 @@ runner:
 
 daemon:
 	cd crates/daemon \
-		&& cargo build --release \
-		&& cd -
-
-mediator:
-	cd crates/mediator \
 		&& cargo build --release \
 		&& cd -
 
