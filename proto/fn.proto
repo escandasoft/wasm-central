@@ -8,6 +8,8 @@ service Functions {
   rpc Load (stream FunctionLoadPartRequest) returns (FunctionLoadReply);
 
   rpc Unload (FunctionUnloadRequest) returns (FunctionUnloadReply);
+
+  rpc Execute (FunctionExecuteRequest) returns (FunctionExecuteResponse);
 }
 
 message FunctionListRequest {}
@@ -50,6 +52,20 @@ message FunctionUnloadReply {
   int64 time = 4;
 }
 
+message FunctionExecuteRequest {
+  string module_name = 1;
+  string input = 2;
+  string output = 3;
+  Schema input_schema = 4;
+  Schema output_schema = 5;
+  bytes body = 6;
+}
+
+message FunctionExecuteResponse {
+  Schema schema = 1;
+  bytes body = 2;
+}
+
 service Subscriber {
   rpc Subscribe(stream Topic) returns (stream TopicResult);
 }
@@ -66,24 +82,6 @@ message TopicMessage {
   string topic = 1;
   bytes key = 2;
   bytes value = 3;
-}
-
-service Executor {
-  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
-}
-
-message ExecuteRequest {
-  string module_name = 1;
-  string input = 2;
-  string output = 3;
-  Schema input_schema = 4;
-  Schema output_schema = 5;
-  bytes body = 6;
-}
-
-message ExecuteResponse {
-  Schema schema = 1;
-  bytes body = 2;
 }
 
 message Record {

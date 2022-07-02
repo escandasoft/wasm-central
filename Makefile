@@ -4,7 +4,7 @@
 download-wasi-sdk:
 	./install_wasi_sdk.sh
 
-all: wrapper cli runner daemon
+all: wrapper cli runner daemon mediator
 
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
@@ -21,6 +21,9 @@ daemon:
 	cd crates/daemon \
 		&& cargo build --release \
 		&& cd -
+
+mediator:
+	cd mediator && mvn package && cd -
 
 test-runner:
 		cd crates/runner \
