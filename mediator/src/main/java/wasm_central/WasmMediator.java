@@ -1,5 +1,6 @@
 package wasm_central;
 
+import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
 import picocli.CommandLine;
@@ -11,12 +12,6 @@ public class WasmMediator implements QuarkusApplication {
     @CommandLine.Command(name = "wasm-mediator", mixinStandardHelpOptions = true, version = "wasm-mediator 0.1.0",
             description = "Listens for Kafka and executes a WASM module on topic messages.")
     static class Program implements Callable<Integer> {
-        @CommandLine.Parameters(description = "The host address to listen to.")
-        private String host;
-
-        @CommandLine.Parameters(description = "The port to listen to.")
-        private int port;
-
         @CommandLine.Option(names = {"-fh", "--fn-host"}, description = "Functions host")
         private String functionsHost;
 
@@ -33,6 +28,7 @@ public class WasmMediator implements QuarkusApplication {
     @Override
     public int run(String... args) throws Exception {
         new CommandLine(new Program()).execute(args);
+        Quarkus.waitForExit();
         return 0;
     }
 }

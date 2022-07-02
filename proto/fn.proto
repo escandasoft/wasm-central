@@ -99,17 +99,29 @@ message Schema {
 }
 
 service Schemas {
+  rpc ToJson(ToJsonRequest) returns (ToJsonResponse);
   rpc SaveSchema(SaveRequest) returns (SaveSchemaResponse);
+}
+
+message ToJsonRequest {
+  string schema_uuid = 1;
+  bytes body = 2;
+}
+
+message ToJsonResponse {
+  string schema_uuid = 1;
+  string json = 2;
 }
 
 message SaveSchemaResponse {
   bool success = 1;
+  string schema_uuid = 2;
   enum ErrorCode {
     IO_ERROR = 0;
     VALIDATION_ERROR = 1;
   }
-  ErrorCode error_code = 2;
-  optional string error_message = 3;
+  ErrorCode error_code = 3;
+  optional string error_message = 4;
 }
 
 message SaveRequest {
