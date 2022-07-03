@@ -35,7 +35,7 @@ impl DirectoryWatcher {
             );
             let path = file.path();
             let ext = path.extension();
-            if ext.is_some() && ext.unwrap().eq("zip") {
+            if ext.is_some() && ext.unwrap().eq("wasm") {
                 let name = path.file_stem();
                 let mut status_str = "deploy";
                 for alternate_status in ["deploy", "undeploy", "running", "undeployed"] {

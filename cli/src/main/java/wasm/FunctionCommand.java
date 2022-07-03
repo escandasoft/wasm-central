@@ -27,9 +27,7 @@ public class FunctionCommand {
     }
 
     @CommandLine.Command(name = "deploy")
-    public int deploy(@CommandLine.Option(names = "-H") String host,
-                      @CommandLine.Option(names = "-P") int port,
-                      @CommandLine.Option(names = "-F") String file,
+    public int deploy(@CommandLine.Option(names = "-F") String file,
                       @CommandLine.Option(names = "-I") String inputs,
                       @CommandLine.Option(names = "-O") String outputs) {
         System.out.println("!! deploying function");

@@ -23,7 +23,9 @@ daemon:
 		&& cd -
 
 mediator:
-	cd mediator && mvn package && cd -
+	cd mediator; \
+		mvn package \
+		&& cd -
 
 test-runner:
 		cd crates/runner \

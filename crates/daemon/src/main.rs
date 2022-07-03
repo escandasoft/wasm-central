@@ -161,8 +161,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mgr = Arc::new(Mutex::new(FunctionManager::new(path.clone())));
 
-    let modules_server = ExecutorServer::new(Impl::new(mgr.clone()));
-    let bootstrap_future = Server::builder().add_service(modules_server).serve(faddr);
+    let mgmt_server = ManagerServer::new(Impl::new(mgr.clone()));
+    let executor_server = ExecutorServer::new(Impl::new(mgr.clone()));
+    let bootstrap_future = Server::builder()
+        .add_service(mgmt_server)
+        .add_service(executor_server)
+        .serve(faddr);
     println!("Server ready at {}", blue.apply_to(faddr));
 
     let mgr = Arc::clone(&mgr);
