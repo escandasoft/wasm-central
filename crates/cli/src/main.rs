@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut client = FunctionsClient::connect(format!("http://{}:{}", host, port))
                     .await
                     .unwrap_or_else(|_| panic!("Cannot connect to server at {}:{}", host, port));
-                match client.list(FunctionListRequest {}).await {
+                match client.list(ListRequest {}).await {
                     Ok(response) => {
                         let reply = response.into_inner();
                         println!("Found {} modules", reply.item_no);
@@ -63,24 +63,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let iterable = tokio_stream::iter(0..((buffer.len() / BUFFER_SIZE) + 1))
                             .map(move |i| {
                                 let offset = i * BUFFER_SIZE;
-                                println!("!! made ModuleLoadPartRequest {}", i);
+                                println!("!! made LoadPartRequest {}", i);
                                 let top = cmp::min(buffer.len(), offset + BUFFER_SIZE);
                                 let range = offset..top;
                                 {
                                     let fmt = range.clone();
                                     println!("!! sending range ({}, {})", fmt.start, fmt.end);
                                 }
-                                FunctionLoadPartRequest {
-                                    file_name: file_path
-                                        .clone()
-                                        .file_name()
-                                        .unwrap()
-                                        .to_str()
-                                        .unwrap()
-                                        .to_owned(),
-                                    inputs: inputs.clone(),
-                                    outputs: outputs.clone(),
-                                    runnable_bytes: buffer[range].to_vec(),
+                                let fn_name = file_path
+                                    .clone()
+                                    .file_name()
+                                    .unwrap()
+                                    .to_str()
+                                    .unwrap()
+                                    .to_owned();
+                                LoadPartRequest {
+                                    name: fn_name,
+                                    body: buffer[range].to_vec(),
                                 }
                             });
                         println!("Starting to stream file to server");
