@@ -2,52 +2,8 @@ syntax = "proto3";
 
 package fn_proto;
 
-service Functions {
-  rpc List (ListRequest) returns (ListReply);
-
-  rpc Load (stream LoadPartRequest) returns (LoadReply);
-
-  rpc Unload (UnloadRequest) returns (UnloadReply);
-
-  rpc Execute (ExecuteRequest) returns (ExecuteReply);
-}
-
-message ListRequest {}
-
-message ListReply {
-  int32 item_no = 1;
-  repeated ListReplyItem items = 2;
-}
-
-message ListReplyItem {
-  string name = 1;
-  string status = 2;
-  int64 successes = 3;
-  int64 failures = 4;
-  int64 total_messages = 5;
-  double fail_rate_per_minute = 6;
-}
-
-message LoadPartRequest {
-  string name = 1;
-  bytes body = 2;
-}
-
-message LoadReply {
-  bool success = 1;
-  optional string error_message = 2;
-  int64 time = 3;
-}
-
-message UnloadRequest {
-  string module_name = 1;
-}
-
-message UnloadReply {
-  bool success = 1;
-  optional string error_message = 2;
-  string unloaded_module_name = 3;
-  int64 time = 4;
+service Executor {
+  rpc Execute(ExecuteRequest) returns (ExecuteReply);
 }
 
 message ExecuteRequest {

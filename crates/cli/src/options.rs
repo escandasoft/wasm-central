@@ -24,7 +24,7 @@ pub enum ModuleCommands {
         #[clap(short = 'p', long = "port")]
         port: i16,
 
-        #[clap(short, long)]
+        #[clap(short = 'w', long = "wasm")]
         file_path: std::path::PathBuf,
 
         #[clap(short = 'i', long = "inputs")]
