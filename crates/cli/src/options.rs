@@ -10,34 +10,11 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum ModuleCommands {
-    List {
-        #[clap(short = 'H', long = "host")]
-        host: String,
-
-        #[clap(short = 'p', long = "port")]
-        port: i16,
-    },
-    Deploy {
-        #[clap(short = 'H', long = "host")]
-        host: String,
-
-        #[clap(short = 'p', long = "port")]
-        port: i16,
-
-        #[clap(short = 'w', long = "wasm")]
-        file_path: std::path::PathBuf,
-
-        #[clap(short = 'i', long = "inputs")]
-        inputs: String,
-
-        #[clap(short = 'o', long = "outputs")]
-        outputs: String,
-    },
     Compile {
-        #[clap(short, long)]
+        #[clap(short = 'I', long = "input_file")]
         input_file: std::path::PathBuf,
 
-        #[clap(short, long)]
+        #[clap(short = 'O', long = "output_file")]
         output_file: std::path::PathBuf,
     },
 }
