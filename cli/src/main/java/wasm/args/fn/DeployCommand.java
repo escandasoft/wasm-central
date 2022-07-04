@@ -38,7 +38,7 @@ public class DeployCommand implements Callable<Integer> {
         var pathFile = filePath.toFile();
         try (FileInputStream is = new FileInputStream(pathFile)) {
             System.out.println("!! deploying function named '" + name + "'");
-            Multi<Mgmt.LoadPartRequest> multi = Multi.createFrom().range(0, (int) Files.size(filePath) / BUFFER_SIZE + 1)
+            var multi = Multi.createFrom().range(0, (int) Files.size(filePath) / BUFFER_SIZE + 1)
                     .map(i -> {
                         try {
                             if (is.available() > 0) {
@@ -60,7 +60,7 @@ public class DeployCommand implements Callable<Integer> {
                     })
                     .filter(Optional::isPresent)
                     .map(Optional::get);
-            Mgmt.LoadReply reply = manager.get().load(multi)
+            var reply = manager.get().load(multi)
                     .await()
                     .atMost(Duration.ofMinutes(2));
             if (reply.getSuccess()) {

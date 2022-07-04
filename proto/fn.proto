@@ -14,9 +14,6 @@ message ExecuteRequest {
 }
 
 message ExecuteReply {
-  Schema schema = 1;
-  int32 code = 2;
-  bytes body = 3;
 }
 
 message Record {

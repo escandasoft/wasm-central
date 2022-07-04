@@ -61,15 +61,19 @@ impl Executor for Impl {
         let req = request.into_inner();
         if let Some(handle) = self.manager.lock()
             .unwrap()
-            .get_handle(req.name) {
+            .get_handle(&req.name) {
             match handle.run(&DataFrame {
-
+                body: String::from(req.body)
             }) {
                 Ok(output) => {
+                    println!("Executed function");
                 }
-                Err(_) => {}
+                Err(_) => {
+                    eprintln!("Error executing function");
+                }
             }
         }
+        Ok(ExecuteReply {})
     }
 }
 

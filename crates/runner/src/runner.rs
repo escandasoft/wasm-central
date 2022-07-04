@@ -1,12 +1,15 @@
+use std::fs;
 use crate::data::DataFrame;
 
 use fork::Fork;
 use std::io::Read;
 use std::ops::Deref;
 use std::sync::Arc;
+use wasi_cap_std_sync::file::File;
 use wasmer::InstantiationError::{HostEnvInitialization, Link, Start};
 use wasmer::{Cranelift, Instance, Module, Store, Universal, UniversalEngine};
-use wasmer_wasi::WasiState;
+use wasmer_wasi::{Pipe, WasiState};
+use std::io::Write;
 
 #[derive(Clone)]
 pub struct CompilationUnit {
@@ -51,7 +54,7 @@ impl Compiler {
 }
 
 fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
-    match create_instance(compilation_unit) {
+    match create_instance(compilation_unit, "".to_owned()) {
         Ok(instance) => {
             let exports = instance.exports;
             if exports.get_function(PROCESS_FN_SYM).is_err() {
@@ -68,8 +71,12 @@ fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
     }
 }
 
-fn create_instance(compilation_unit: &CompilationUnit) -> Result<Instance, String> {
-    let wasi_env = WasiState::new("runner").finalize();
+fn create_instance(compilation_unit: &CompilationUnit, input: String) -> Result<Instance, String> {
+    let mut pipe = Pipe::new();
+    pipe.write(input.as_bytes()).map_err(|err| format!("{:?}", err))?;
+    let wasi_env = WasiState::new("runner")
+        .stdin(Box::new(pipe))
+        .finalize();
     let import_object = wasi_env.unwrap().import_object(&compilation_unit.module);
     match Instance::new(&compilation_unit.module, &import_object.unwrap()) {
         Ok(instance) => Ok(instance),
@@ -98,10 +105,10 @@ impl Executor {
     pub fn execute(
         &self,
         compilation_unit: &CompilationUnit,
-        _frame: &DataFrame,
+        frame: &DataFrame,
     ) -> Result<DataFrame, String> {
         match fork::fork() {
-            Ok(Fork::Child) => match create_instance(compilation_unit) {
+            Ok(Fork::Child) => match create_instance(compilation_unit, frame.body.clone()) {
                 Ok(instance) => match instance.exports.get_function(PROCESS_FN_SYM) {
                     Ok(exported_fn) => {
                         exported_fn.call(&[]).unwrap();
@@ -145,6 +152,8 @@ impl Executor {
                 println!()
             }
         }
-        Ok(DataFrame {})
+        Ok(DataFrame {
+            body: String::from("")
+        })
     }
 }
