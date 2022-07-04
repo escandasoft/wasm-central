@@ -1,1 +1,3 @@
-pub struct DataFrame {}
+pub struct DataFrame {
+    pub body: String
+}

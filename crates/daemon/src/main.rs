@@ -15,6 +15,7 @@ use prost::Message;
 use std::io::{Read, Write};
 use std::{fs, thread};
 use zip::write::FileOptions;
+use wasm_central_runner::data::DataFrame;
 
 use crate::fn_proto::executor_server::Executor;
 use crate::fn_proto::executor_server::ExecutorServer;
@@ -57,7 +58,18 @@ impl Executor for Impl {
         &self,
         request: Request<ExecuteRequest>,
     ) -> Result<Response<ExecuteReply>, Status> {
-        Err(Status::internal("err"))
+        let req = request.into_inner();
+        if let Some(handle) = self.manager.lock()
+            .unwrap()
+            .get_handle(req.name) {
+            match handle.run(&DataFrame {
+
+            }) {
+                Ok(output) => {
+                }
+                Err(_) => {}
+            }
+        }
     }
 }
 

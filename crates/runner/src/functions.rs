@@ -207,53 +207,26 @@ impl FunctionManager {
     fn deploy(&mut self, module_name: &str) -> Result<FunctionStatus, FunctionManagerError> {
         let module_map = self.running_modules_map();
         if let Some(module) = module_map.get(&module_name.to_owned()) {
-            let meta_zip_result = open_zip(module.file_path.clone());
-            let runnable_zip_result = open_zip(module.file_path.clone());
-
-            if meta_zip_result.is_err() || runnable_zip_result.is_err() {
-                return Err(FunctionManagerError::CompilationError(
+            if let Ok(mut file) = fs::File::open(module.file_path.clone()) {
+                let compilation_unit_result = self.compiler.compile(&mut file);
+                if compilation_unit_result.is_err() {
+                    return Err(FunctionManagerError::CompilationError(
+                        module_name.to_owned(),
+                        format!(
+                            "couldn't JIT compile WASM: {:?}",
+                            compilation_unit_result.err().unwrap()
+                        ),
+                    ));
+                }
+                self.change_status(module_name, module, FunctionStatus::Deploy);
+                Ok(FunctionStatus::Deployed)
+            } else {
+                Err(FunctionManagerError::UnavailableModule(
                     module_name.to_owned(),
-                    "cannot open zip archive".to_string(),
-                ));
+                ))
             }
-
-            let mut meta_archive = meta_zip_result.unwrap();
-            let meta_file_opt = meta_archive.by_name("meta.json");
-            if meta_file_opt.is_err() {
-                return Err(FunctionManagerError::CompilationError(
-                    module_name.to_owned(),
-                    "cannot find meta.json file in zip archive".to_string(),
-                ));
-            }
-
-            let mut runnable_archive = runnable_zip_result.unwrap();
-            let runnable_file_opt = runnable_archive.by_name("runnable.wasm");
-            if runnable_file_opt.is_err() {
-                return Err(FunctionManagerError::CompilationError(
-                    module_name.to_owned(),
-                    "cannot find runnable.wasm file in zip archive".to_string(),
-                ));
-            }
-
-            let _meta_file = meta_file_opt.unwrap();
-            let mut runnable_file = runnable_file_opt.unwrap();
-
-            let compilation_unit_result = self.compiler.compile(&mut runnable_file);
-            if compilation_unit_result.is_err() {
-                return Err(FunctionManagerError::CompilationError(
-                    module_name.to_owned(),
-                    format!(
-                        "couldn't JIT compile WASM: {:?}",
-                        compilation_unit_result.err().unwrap()
-                    ),
-                ));
-            }
-            self.change_status(module_name, module, FunctionStatus::Deploy);
-            Ok(FunctionStatus::Deployed)
         } else {
-            Err(FunctionManagerError::UnavailableModule(
-                module_name.to_owned(),
-            ))
+            Err(FunctionManagerError::UnavailableModule(module_name.to_owned()))
         }
     }
 
