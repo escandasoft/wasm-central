@@ -29,10 +29,6 @@ impl DirectoryWatcher {
         let mut dropped_files = vec![];
         for result in dir {
             let file = result.expect("result needed");
-            println!(
-                "!! found file at {}",
-                String::from(file.file_name().to_str().unwrap())
-            );
             let path = file.path();
             let ext = path.extension();
             if ext.is_some() && ext.unwrap().eq("wasm") {
@@ -48,11 +44,6 @@ impl DirectoryWatcher {
                 let p = Path::new(&path);
                 let pbuf = p.to_path_buf();
                 let next_status = String::from(status_str);
-                println!(
-                    "!! added dropped file to {} with {} status",
-                    pbuf.display(),
-                    next_status
-                );
                 dropped_files.push(WatcherEntry {
                     path: pbuf,
                     next_status,

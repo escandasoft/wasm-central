@@ -13,7 +13,7 @@ use tonic::{transport::Server, Request, Response, Status, Streaming};
 use iter_tools::Itertools;
 use prost::Message;
 use std::io::{Read, Write};
-use std::{fs, thread};
+use std::{fs, str, thread};
 use zip::write::FileOptions;
 use wasm_central_runner::data::DataFrame;
 
@@ -63,17 +63,24 @@ impl Executor for Impl {
             .unwrap()
             .get_handle(&req.name) {
             match handle.run(&DataFrame {
-                body: String::from(req.body)
+                body: req.body.clone().into()
             }) {
                 Ok(output) => {
                     println!("Executed function");
+                    Ok(Response::new(ExecuteReply {
+                        body: output.body
+                    }))
                 }
-                Err(_) => {
+                Err(err) => {
                     eprintln!("Error executing function");
+                    Err(Status::internal(format!("{:?}", err)))
                 }
             }
+        } else {
+            Ok(Response::new(ExecuteReply {
+                body: "Couldn't execute fn".to_string().as_bytes().to_vec()
+            }))
         }
-        Ok(ExecuteReply {})
     }
 }
 

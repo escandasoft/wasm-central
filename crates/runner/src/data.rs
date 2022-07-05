@@ -1,3 +1,3 @@
 pub struct DataFrame {
-    pub body: String
+    pub body: Vec<u8>
 }

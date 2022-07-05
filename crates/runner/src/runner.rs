@@ -1,15 +1,19 @@
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::VecDeque;
+use std::fmt::format;
 use std::fs;
 use crate::data::DataFrame;
 
 use fork::Fork;
-use std::io::Read;
+use std::io::{Read, SeekFrom, stderr, stdout};
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use wasi_cap_std_sync::file::File;
-use wasmer::InstantiationError::{HostEnvInitialization, Link, Start};
-use wasmer::{Cranelift, Instance, Module, Store, Universal, UniversalEngine};
-use wasmer_wasi::{Pipe, WasiState};
 use std::io::Write;
+use std::rc::Rc;
+use wasi_cap_std_sync::WasiCtxBuilder;
+use wasmtime::{Module, Store, Engine, Instance, AsContextMut, Linker};
+use wasmtime_wasi::WasiCtx;
 
 #[derive(Clone)]
 pub struct CompilationUnit {
@@ -17,21 +21,28 @@ pub struct CompilationUnit {
 }
 
 pub struct Compiler {
-    store: Store,
+    engine: Arc<Engine>,
 }
 
 pub fn new_pair() -> (Compiler, Executor) {
-    let comp_config = Cranelift::default();
-    let engine_arc = Arc::new(Universal::new(comp_config).engine());
+    let mut config = wasmtime::Config::new();
+    config.cache_config_load_default().expect("working cache directory");
+
+    config.wasm_reference_types(false);
+    config.wasm_simd(false);
+    config.wasm_threads(false);
+    config.wasm_bulk_memory(false);
+
+
+    let engine_arc = Arc::new(wasmtime::Engine::new(&config).expect("WASM engine"));
     let compiler = Compiler::new(engine_arc.clone());
     let executor = Executor::new(engine_arc);
     (compiler, executor)
 }
 
 impl Compiler {
-    pub fn new(engine: Arc<UniversalEngine>) -> Compiler {
-        let store = Store::new(engine.deref());
-        Compiler { store }
+    pub fn new(engine: Arc<Engine>) -> Compiler {
+        Compiler { engine }
     }
 
     pub fn compile(&self, reader: &mut impl Read) -> Result<CompilationUnit, String> {
@@ -39,7 +50,7 @@ impl Compiler {
         reader
             .read_to_end(&mut buff)
             .expect("Cannot use reader during compilation");
-        match Module::new(&self.store, buff) {
+        match Module::new(&self.engine, buff) {
             Ok(module) => {
                 let compilation_unit = CompilationUnit { module };
                 if let Some(validation_error) = get_validation_errors(&compilation_unit) {
@@ -54,7 +65,7 @@ impl Compiler {
 }
 
 fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
-    match create_instance(compilation_unit, "".to_owned()) {
+    /* match create_instance(compilation_unit, "".to_owned()) {
         Ok(instance) => {
             let exports = instance.exports;
             if exports.get_function(PROCESS_FN_SYM).is_err() {
@@ -68,92 +79,54 @@ fn get_validation_errors(compilation_unit: &CompilationUnit) -> Option<String> {
             None
         }
         Err(error) => Some(format!("Cannot create instance because error: {}", error)),
-    }
+    } */
+    None
 }
 
-fn create_instance(compilation_unit: &CompilationUnit, input: String) -> Result<Instance, String> {
-    let mut pipe = Pipe::new();
-    pipe.write(input.as_bytes()).map_err(|err| format!("{:?}", err))?;
-    let wasi_env = WasiState::new("runner")
-        .stdin(Box::new(pipe))
-        .finalize();
-    let import_object = wasi_env.unwrap().import_object(&compilation_unit.module);
-    match Instance::new(&compilation_unit.module, &import_object.unwrap()) {
-        Ok(instance) => Ok(instance),
-        Err(error) => match error {
-            Link(_error) => Err("Cannot create WASM instance: linking error".to_string()),
-            Start(_error) => Err("Cannot create WASM instance: start error".to_string()),
-            HostEnvInitialization(_error) => {
-                Err("Cannot create WASM instance: host env init".to_string())
-            }
-            _ => Err("Cannot create WASM instance: unknown _error".to_string()),
-        },
-    }
+pub struct Executor {
+    engine: Arc<Engine>,
 }
-
-pub struct Executor;
-
-const PROCESS_FN_SYM: &str = "process";
-
-const HANDLE_ERROR_FN_SYM: &str = "on_error";
 
 impl Executor {
-    pub fn new(_engine: Arc<UniversalEngine>) -> Executor {
-        Executor {}
+    pub fn new(engine: Arc<Engine>) -> Executor {
+        Executor { engine }
     }
 
     pub fn execute(
         &self,
-        compilation_unit: &CompilationUnit,
+        compilation_unit: &Option<CompilationUnit>,
         frame: &DataFrame,
-    ) -> Result<DataFrame, String> {
-        match fork::fork() {
-            Ok(Fork::Child) => match create_instance(compilation_unit, frame.body.clone()) {
-                Ok(instance) => match instance.exports.get_function(PROCESS_FN_SYM) {
-                    Ok(exported_fn) => {
-                        exported_fn.call(&[]).unwrap();
-                    }
-                    Err(error) => {
-                        eprintln!(
-                            "Cannot get exported function {}: {:?}",
-                            PROCESS_FN_SYM, error
-                        );
-                    }
-                },
-                Err(error) => {
-                    eprintln!(
-                        "Cannot create instance of compilation unit because {}",
-                        error
-                    )
-                }
-            },
-            Ok(Fork::Parent(child)) => unsafe {
-                let pidfd = nc::pidfd_open(child, 0);
-                if pidfd == Err(nc::errno::ENOSYS) {
-                    eprintln!(
-                        "PIDFD_OPEN syscall not supported in this system: cannot execute runnable"
-                    );
-                } else {
-                    let mut pollfd = libc::pollfd {
-                        events: 0x001,
-                        fd: pidfd.unwrap(),
-                        revents: 0,
-                    };
-                    let r = libc::poll(&mut pollfd, 1, 2000);
-                    if r >= 0 && pollfd.revents & libc::POLLIN == 0 {
-                        let r = libc::kill(child, 0);
-                        if r == 0 {
-                            libc::kill(child, libc::SIGKILL);
-                        }
-                    }
-                }
-            },
-            Err(_) => {
-                println!()
-            }
-        }
+    ) -> anyhow::Result<DataFrame> {
+        let mut input_file = memfile::MemFile::create_default("tmp-stdin")?;
+        let mut output_file = memfile::MemFile::create_default("tmp-stdout")?;
+        let mut err_file = memfile::MemFile::create_default("tmp-stderr")?;
+
+        input_file.write_all(&frame.body)?;
+
+        let stdin = Box::new(wasi_common::pipe::ReadPipe::from_shared(Arc::new(RwLock::new(input_file))));
+        let mut output_guarded = Arc::new(RwLock::new(output_file));
+        let stderr = Box::new(wasi_common::pipe::WritePipe::from_shared(output_guarded.clone()));
+        let mut stdout = Box::new(wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(err_file))));
+
+        let mut ctx = WasiCtxBuilder::new();
+        let mut wasi_ctx = ctx
+            .stdin(stdin)
+            .stdout(stdout)
+            .stderr(stderr)
+            .build();
+        let mut store = Box::new(Store::new(&self.engine, wasi_ctx));
+        let mut linker = Linker::new(&self.engine);
+        wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
+
+        linker.module(store.as_context_mut(), "", &compilation_unit.as_ref().unwrap().module)?;
+        linker.get_default(store.as_context_mut(), "")?
+            .typed::<(), (), _>(store.as_context_mut())?
+            .call(store.as_context_mut(), ())?;
+        let mut buffer = vec![];
+        let mut output = output_guarded.write().unwrap();
+        output.read_to_end(&mut buffer)?;
         Ok(DataFrame {
-            body: String::from("")
+            body: buffer
         })
     }
 }

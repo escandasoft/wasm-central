@@ -32,15 +32,18 @@ pub struct Module {
 
 pub struct ModuleHandle<'a> {
     pub name: String,
-    compilation_unit: CompilationUnit,
+    compilation_unit: Option<CompilationUnit>,
     backreference: &'a FunctionManager,
 }
 
 impl<'a> ModuleHandle<'a> {
     pub fn run(&self, frame: &DataFrame) -> Result<DataFrame, String> {
-        self.backreference
+        match self.backreference
             .executor
-            .execute(&self.compilation_unit, frame)
+            .execute(&self.compilation_unit, frame) {
+            Ok(dataframe) => Ok(dataframe),
+            Err(err) => Err(format!("Cannot execute module fn named {} because '{}'", self.name, err))
+        }
     }
 }
 
@@ -144,24 +147,21 @@ impl FunctionManager {
     pub fn get_handle(&self, module_name: &String) -> Option<ModuleHandle> {
         if let Some(module) = self.module_map.get(module_name) {
             let module_status = module.status;
-            println!("!! found module?: yes, status: {}", module_status.as_ref());
-            if module_status.eq(&FunctionStatus::Deployed) {
-                let cu = module.compilation.as_ref().unwrap();
-                Some(ModuleHandle {
-                    name: module_name.clone(),
-                    backreference: self,
-                    compilation_unit: cu.clone(),
-                })
-            } else {
-                None
+            if module_status.eq(&FunctionStatus::Deployed) || module_status.eq(&FunctionStatus::Deploy) {
+                println!("!! found module?: yes, status: {}", module_status.as_ref());
+                if let Some(cu) = module.compilation.clone() {
+                    return Some(ModuleHandle {
+                        name: module_name.clone(),
+                        backreference: self,
+                        compilation_unit: Some(cu),
+                    })
+                }
             }
-        } else {
-            None
         }
+        None
     }
 
     pub fn load(&mut self, module_name: &String, new_status: &FunctionStatus) {
-        println!("Starting to load module {}", module_name.clone());
         let t_now = SystemTime::now();
         let module_opt = self.module_map.get(&module_name.clone());
         if module_opt.is_none() {
@@ -204,7 +204,7 @@ impl FunctionManager {
         );
     }
 
-    fn deploy(&mut self, module_name: &str) -> Result<FunctionStatus, FunctionManagerError> {
+    fn deploy(&mut self, module_name: &str) -> Result<(), FunctionManagerError> {
         let module_map = self.running_modules_map();
         if let Some(module) = module_map.get(&module_name.to_owned()) {
             if let Ok(mut file) = fs::File::open(module.file_path.clone()) {
@@ -218,8 +218,9 @@ impl FunctionManager {
                         ),
                     ));
                 }
-                self.change_status(module_name, module, FunctionStatus::Deploy);
-                Ok(FunctionStatus::Deployed)
+                let compilation = Some(compilation_unit_result.unwrap());
+                self.module_map.insert(module_name.to_owned(), Module { status: FunctionStatus::Deployed, compilation, ..module.clone() });
+                Ok(())
             } else {
                 Err(FunctionManagerError::UnavailableModule(
                     module_name.to_owned(),
@@ -243,7 +244,7 @@ impl FunctionManager {
         }
     }
 
-    fn change_status(&mut self, module_name: &str, module: &Module, status: FunctionStatus) {
+    fn change_status(&mut self, module_name: &String, module: &Module, status: FunctionStatus) {
         let module_replacement = Module {
             status,
             ..module.clone()
