@@ -63,7 +63,7 @@ impl Executor for Impl {
             .unwrap()
             .get_handle(&req.name) {
             match handle.run(&DataFrame {
-                body: req.body.clone().into()
+                body: req.body
             }) {
                 Ok(output) => {
                     println!("Executed function");

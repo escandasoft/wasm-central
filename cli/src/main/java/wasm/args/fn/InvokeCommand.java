@@ -31,7 +31,7 @@ public class InvokeCommand implements Callable<Integer> {
         System.out.println("!! invoking '" + name + "' with payload at " + payload);
         var payloadPath = Paths.get(payload);
         var file = payloadPath.toFile();
-        Fn.ExecuteRequest.Builder builder = Fn.ExecuteRequest.newBuilder()
+        var builder = Fn.ExecuteRequest.newBuilder()
                 .setName(name);
         if (payload == null) {
             try (var fis = new FileInputStream(file)) {

@@ -104,7 +104,7 @@ impl Executor {
         input_file.seek(SeekFrom::Start(0))?;
 
         let stdin = Box::new(wasi_common::pipe::ReadPipe::from_shared(Arc::new(RwLock::new(input_file))));
-        let output_guarded = Arc::new(RwLock::new(output_file));
+        let output_guarded = Arc::new(RwLock::new(output_file.try_clone().unwrap()));
         let mut stdout = Box::new(wasi_common::pipe::WritePipe::from_shared(output_guarded.clone()));
         let stderr = Box::new(wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(stderr()))));
 
@@ -124,7 +124,8 @@ impl Executor {
             .call(store.as_context_mut(), ())?;
         let mut buffer = vec![];
         let mut output = output_guarded.write().unwrap();
-        output.read_to_end(&mut buffer)?;
+        output_file.seek(SeekFrom::Start(0))?;
+        output_file.read_to_end(&mut buffer)?;
         Ok(DataFrame {
             body: buffer
         })
