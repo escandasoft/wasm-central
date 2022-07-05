@@ -5,7 +5,7 @@ use std::fs;
 use crate::data::DataFrame;
 
 use fork::Fork;
-use std::io::{Read, SeekFrom, stderr, stdout};
+use std::io::{Read, Seek, SeekFrom, stderr, stdout};
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
 use wasi_cap_std_sync::file::File;
@@ -99,14 +99,14 @@ impl Executor {
     ) -> anyhow::Result<DataFrame> {
         let mut input_file = memfile::MemFile::create_default("tmp-stdin")?;
         let mut output_file = memfile::MemFile::create_default("tmp-stdout")?;
-        let mut err_file = memfile::MemFile::create_default("tmp-stderr")?;
 
         input_file.write_all(&frame.body)?;
+        input_file.seek(SeekFrom::Start(0))?;
 
         let stdin = Box::new(wasi_common::pipe::ReadPipe::from_shared(Arc::new(RwLock::new(input_file))));
-        let mut output_guarded = Arc::new(RwLock::new(output_file));
-        let stderr = Box::new(wasi_common::pipe::WritePipe::from_shared(output_guarded.clone()));
-        let mut stdout = Box::new(wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(err_file))));
+        let output_guarded = Arc::new(RwLock::new(output_file));
+        let mut stdout = Box::new(wasi_common::pipe::WritePipe::from_shared(output_guarded.clone()));
+        let stderr = Box::new(wasi_common::pipe::WritePipe::from_shared(Arc::new(RwLock::new(stderr()))));
 
         let mut ctx = WasiCtxBuilder::new();
         let mut wasi_ctx = ctx

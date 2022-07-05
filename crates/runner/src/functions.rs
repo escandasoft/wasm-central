@@ -41,8 +41,14 @@ impl<'a> ModuleHandle<'a> {
         match self.backreference
             .executor
             .execute(&self.compilation_unit, frame) {
-            Ok(dataframe) => Ok(dataframe),
-            Err(err) => Err(format!("Cannot execute module fn named {} because '{}'", self.name, err))
+            Ok(dataframe) => {
+                println!("Successfully executed fn {}", self.name);
+                Ok(dataframe)
+            },
+            Err(err) => {
+                eprintln!("Cannot execute fn named {} because {}", self.name, err);
+                Err(format!("Cannot execute module fn named {}", self.name))
+            }
         }
     }
 }

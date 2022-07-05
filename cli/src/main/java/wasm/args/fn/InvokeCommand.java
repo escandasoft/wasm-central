@@ -17,8 +17,11 @@ public class InvokeCommand implements Callable<Integer> {
     @CommandLine.Option(names = {"-n", "--name"}, description = "Function name", required = true)
     String name;
 
-    @CommandLine.Option(names = {"-p", "--payload"}, description = "Payload path", required = true)
+    @CommandLine.Option(names = {"-p", "--payload"}, description = "Payload")
     String payload;
+
+    @CommandLine.Option(names = {"-f", "--file"}, description = "Payload file path")
+    String file;
 
     @GrpcClient
     Instance<Executor> executor;
@@ -28,16 +31,20 @@ public class InvokeCommand implements Callable<Integer> {
         System.out.println("!! invoking '" + name + "' with payload at " + payload);
         var payloadPath = Paths.get(payload);
         var file = payloadPath.toFile();
-        try (var fis = new FileInputStream(file)) {
-            var reply = executor.get().execute(Fn.ExecuteRequest.newBuilder()
-                            .setName(name)
-                            .setBody(ByteString.readFrom(fis))
-                            .build())
-                    .await()
-                    .atMost(Duration.ofMinutes(2));
-            System.out.println("Response code => " + reply.getCode());
-            System.out.println("Response => " + reply.getBody());
+        Fn.ExecuteRequest.Builder builder = Fn.ExecuteRequest.newBuilder()
+                .setName(name);
+        if (payload == null) {
+            try (var fis = new FileInputStream(file)) {
+                builder.setBody(ByteString.readFrom(fis));
+            }
+        } else {
+            builder.setBody(ByteString.copyFromUtf8(payload));
         }
+        var reply = executor.get().execute(builder.build())
+                .await()
+                .atMost(Duration.ofMinutes(2));
+        System.out.println("Response code => " + reply.getCode());
+        System.out.println("Response => " + reply.getBody());
         return 0;
     }
 }

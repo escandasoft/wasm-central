@@ -53,19 +53,25 @@ pub extern "C" fn init() {
 
 fn main() {
     unsafe {
-        let context = JS_CONTEXT.get().unwrap();
-        let receiver = ENTRYPOINT.0.get().unwrap();
-        let main = ENTRYPOINT.1.get().unwrap();
+        let context = JS_CONTEXT.get().expect("JS context");
+        let receiver = ENTRYPOINT.0.get().expect("Entrypoint");
+        let main = ENTRYPOINT.1.get().expect("main function");
         let input_bytes = engine::load().expect("Couldn't load input");
 
-        let input_value = json::transcode_input(context, &input_bytes).unwrap();
-        let output_value = main.call(receiver, &[input_value]);
+        match json::transcode_input(context, &input_bytes) {
+            Ok(input_value) => {
+                let output_value = main.call(receiver, &[input_value]);
 
-        if output_value.is_err() {
-            panic!("{}", output_value.unwrap_err().to_string());
+                if output_value.is_err() {
+                    panic!("{}", output_value.unwrap_err().to_string());
+                }
+
+                let output = json::transcode_output(output_value.unwrap()).unwrap();
+                engine::store(&output).expect("Couldn't store output");
+            }
+            Err(err) => {
+                eprintln!("Cannot read json because {}", err);
+            }
         }
-
-        let output = json::transcode_output(output_value.unwrap()).unwrap();
-        engine::store(&output).expect("Couldn't store output");
     }
 }
