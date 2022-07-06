@@ -14,6 +14,7 @@ use iter_tools::Itertools;
 use prost::Message;
 use std::io::{Read, Write};
 use std::{fs, str, thread};
+use std::fmt::format;
 use zip::write::FileOptions;
 use wasm_central_runner::data::DataFrame;
 
@@ -134,6 +135,8 @@ impl Manager for Impl {
                 println!("!! wrote {} bytes", item.body.len());
             }
             file.flush()?;
+            let command_path = rt_path.join(format!("{}.redeploy", item.name.clone()));
+            fs::File::create(command_path)?;
         } else {
             eprintln!("Cannot receive file stream");
         }

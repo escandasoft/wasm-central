@@ -93,7 +93,7 @@ impl FunctionManager {
     }
 
     pub fn tick(&mut self) {
-        let to_undeploy = self.get_to_undeploy();
+        let to_undeploy = self.deleted_functions();
         for item in to_undeploy {
             self.undeploy(&item).unwrap();
         }
@@ -105,10 +105,14 @@ impl FunctionManager {
             let next_status = FunctionStatus::from_string(&file_entry.next_status);
 
             if let Some(item) = self.module_map.get(&module_name.clone()) {
+                println!("dropped file {}", file_entry.path.to_str().unwrap().to_string());
                 match get_file_checksum(&file_entry.path) {
                     Ok(file_checksum) => {
                         if !file_checksum.eq(&item.checksum) {
-                            self.load(&module_name, &next_status);
+                            println!("checksum {} differs from {}: going to reload fn", file_checksum, item.checksum.clone());
+                            self.load(&module_name, &next_status, &file_checksum);
+                        } else {
+                            println!("same checksum for {} = {}: no reload", module_name, item.checksum.clone());
                         }
                     }
                     Err(error) => eprintln!(
@@ -121,14 +125,14 @@ impl FunctionManager {
                 match get_file_checksum(&file_entry.path) {
                     Ok(file_checksum) => {
                         let item = Module {
-                            checksum: file_checksum,
+                            checksum: file_checksum.clone(),
                             name: module_name.clone(),
                             status: FunctionStatus::Undeployed,
                             file_path: file_entry.path.clone(),
                             compilation: None,
                         };
                         self.module_map.insert(module_name.to_string(), item);
-                        self.load(&module_name, &next_status);
+                        self.load(&module_name, &next_status, &file_checksum);
                     }
                     Err(error) => eprintln!(
                         "Cannot calculate checksum for module {} because {:?}",
@@ -138,9 +142,10 @@ impl FunctionManager {
                 }
             }
         }
+        self.watcher.remove_next_states();
     }
 
-    fn get_to_undeploy(&self) -> Vec<String> {
+    fn deleted_functions(&self) -> Vec<String> {
         let mut to_undeploy = vec![];
         for (module_name, module) in self.module_map.iter() {
             if !module.file_path.exists() {
@@ -167,41 +172,45 @@ impl FunctionManager {
         None
     }
 
-    pub fn load(&mut self, module_name: &String, new_status: &FunctionStatus) {
-        let t_now = SystemTime::now();
-        let module_opt = self.module_map.get(&module_name.clone());
-        if module_opt.is_none() {
-            return;
-        }
+    fn get_fn_by_name(&mut self, name: &str) -> Option<Module> {
+        return self.module_map.get(name).cloned();
+    }
 
-        let module = module_opt.unwrap();
-        match module.status {
-            FunctionStatus::Deploy => {
-                if new_status.eq(&FunctionStatus::Undeploy)
-                    || new_status.eq(&FunctionStatus::Undeployed)
-                {
+    pub fn load(&mut self, module_name: &String, new_status: &FunctionStatus, file_checksum: &String) {
+        println!("Loading fn {} with status {}", module_name, new_status.as_string());
+        let t_now = SystemTime::now();
+        if let Some(module) = self.get_fn_by_name(&module_name.clone()) {
+            match new_status {
+                FunctionStatus::Deploy | FunctionStatus::Deployed => {
+                    if let Err(err) = self.deploy(&*module.name, file_checksum.clone()) {
+                        eprintln!("Cannot deploy fn {} because {}", module_name, err);
+                    }
+                },
+                FunctionStatus::Undeploy | FunctionStatus::Undeployed => {
+                    let module_name = module_name.clone();
+                    let deploy_result = self.undeploy(&module_name);
+                    if deploy_result.is_err() {
+                        println!(
+                            "Couldn't undeploy {} because: {}",
+                            module_name,
+                            match deploy_result.err().unwrap() {
+                                FunctionManagerError::UnavailableModule(module_name) =>
+                                    format!("The module {} is not available anymore", module_name),
+                                _ => "Unknown error".to_string(),
+                            }
+                        );
+                    } else {
+                        println!("Correctly deployed {}", module_name);
+                    }
+                },
+                FunctionStatus::Redeploy => {
                     self.undeploy(module_name).unwrap();
-                }
+                    self.deploy(module_name, file_checksum.clone()).unwrap();
+                },
             }
-            FunctionStatus::Deployed => {}
-            FunctionStatus::Undeploy => {}
-            FunctionStatus::Undeployed => {
-                let module_name = module_name.clone();
-                let deploy_result = self.deploy(&module_name);
-                if deploy_result.is_err() {
-                    println!(
-                        "Couldn't deploy {} because: {}",
-                        module_name,
-                        match deploy_result.err().unwrap() {
-                            FunctionManagerError::UnavailableModule(module_name) =>
-                                format!("The module {} is not available anymore", module_name),
-                            FunctionManagerError::CompilationError(_module_name, err_msg) => err_msg,
-                        }
-                    );
-                } else {
-                    println!("Correctly deployed {}", module_name);
-                }
-            }
+        } else {
+            eprintln!("Cannot load a fn not existent in memory, check consistency");
+            return;
         }
         println!(
             "Modified module {} in {}ms",
@@ -210,7 +219,7 @@ impl FunctionManager {
         );
     }
 
-    fn deploy(&mut self, module_name: &str) -> Result<(), FunctionManagerError> {
+    fn deploy(&mut self, module_name: &str, checksum: String) -> Result<(), FunctionManagerError> {
         let module_map = self.running_modules_map();
         if let Some(module) = module_map.get(&module_name.to_owned()) {
             if let Ok(mut file) = fs::File::open(module.file_path.clone()) {
@@ -225,7 +234,7 @@ impl FunctionManager {
                     ));
                 }
                 let compilation = Some(compilation_unit_result.unwrap());
-                self.module_map.insert(module_name.to_owned(), Module { status: FunctionStatus::Deployed, compilation, ..module.clone() });
+                self.module_map.insert(module_name.to_owned(), Module { status: FunctionStatus::Deployed, compilation, checksum, ..module.clone() });
                 Ok(())
             } else {
                 Err(FunctionManagerError::UnavailableModule(
@@ -249,16 +258,6 @@ impl FunctionManager {
             Err(FunctionManagerError::UnavailableModule(module_name.clone()))
         }
     }
-
-    fn change_status(&mut self, module_name: &String, module: &Module, status: FunctionStatus) {
-        let module_replacement = Module {
-            status,
-            ..module.clone()
-        };
-        self.module_map
-            .insert(module_name.to_owned(), module_replacement)
-            .unwrap();
-    }
 }
 
 fn open_zip(path: PathBuf) -> Result<ZipArchive<impl Read + Seek>, String> {
@@ -277,6 +276,7 @@ fn open_zip(path: PathBuf) -> Result<ZipArchive<impl Read + Seek>, String> {
 pub enum FunctionStatus {
     Deploy,
     Deployed,
+    Redeploy,
     Undeploy,
     Undeployed,
 }
@@ -288,7 +288,8 @@ impl FunctionStatus {
             "undeploy" => FunctionStatus::Undeploy,
             "running" => FunctionStatus::Deployed,
             "undeployed" => FunctionStatus::Undeployed,
-            _ => FunctionStatus::Undeployed,
+            "redeploy" => FunctionStatus::Redeploy,
+            _ => FunctionStatus::Undeployed
         }
     }
 
@@ -298,6 +299,7 @@ impl FunctionStatus {
             FunctionStatus::Deployed => "deployed",
             FunctionStatus::Undeploy => "undeploy",
             FunctionStatus::Undeployed => "undeployed",
+            FunctionStatus::Redeploy => "redeploy"
         };
         String::from(str)
     }

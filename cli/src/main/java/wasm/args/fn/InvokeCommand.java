@@ -47,7 +47,7 @@ public class InvokeCommand implements Callable<Integer> {
         System.out.println("Response code => " + reply.getCode());
         System.out.println("Response => " + reply.getBody());
         var delta = System.currentTimeMillis() - before;
-        System.out.println("Invocation roundtrip took => " + delta + "ms");
+        System.out.println("Invocation round trip took => " + delta + "ms");
         return 0;
     }
 }
