@@ -159,7 +159,6 @@ impl FunctionManager {
         if let Some(module) = self.module_map.get(module_name) {
             let module_status = module.status;
             if module_status.eq(&FunctionStatus::Deployed) || module_status.eq(&FunctionStatus::Deploy) {
-                println!("!! found module?: yes, status: {}", module_status.as_ref());
                 if let Some(cu) = module.compilation.clone() {
                     return Some(ModuleHandle {
                         name: module_name.clone(),

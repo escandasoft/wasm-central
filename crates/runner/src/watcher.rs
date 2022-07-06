@@ -64,7 +64,6 @@ impl DirectoryWatcher {
                 let p = Path::new(&path);
                 let pbuf = p.to_path_buf();
                 let next_status = String::from(status_str);
-                println!("!! dropped file {:?} = {}", pbuf, next_status);
                 dropped_files.push(WatcherEntry {
                     path: pbuf,
                     next_status,

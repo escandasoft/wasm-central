@@ -129,10 +129,8 @@ impl Manager for Impl {
             let full_path = rt_path.join(format!("{}.{}", item.name.clone(), "wasm"));
             let mut file = fs::File::create(full_path.clone())?;
             file.write_all(&item.body)?;
-            println!("!! wrote {} bytes", item.body.len());
             while let Some(item) = streaming.message().await? {
                 file.write_all(&item.body)?;
-                println!("!! wrote {} bytes", item.body.len());
             }
             file.flush()?;
             let command_path = rt_path.join(format!("{}.redeploy", item.name.clone()));
