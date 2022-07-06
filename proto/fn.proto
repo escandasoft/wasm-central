@@ -14,6 +14,7 @@ message ExecuteRequest {
 }
 
 message ExecuteReply {
+  int32 code = 1;
   bytes body = 3;
 }
 

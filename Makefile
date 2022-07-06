@@ -4,7 +4,7 @@
 download-wasi-sdk:
 	./install_wasi_sdk.sh
 
-all: wrapper cli runner daemon mediator
+all: wrapper cli runner daemon mediator cli-tools
 
 cli: wrapper
 		cd crates/cli && cargo build --release && cd -
@@ -24,6 +24,11 @@ daemon:
 
 mediator:
 	cd mediator; \
+		mvn package \
+		&& cd -
+
+cli-tools:
+	cd cli && \
 		mvn package \
 		&& cd -
 
@@ -74,7 +79,7 @@ fmt-mediator:
 				&& cargo clippy --target=wasm32-wasi -- -D warnings \
 				&& cd -
 
-clean: clean-wasi-sdk clean-cargo clean-mediator
+clean: clean-wasi-sdk clean-cargo clean-mediator clean-cli-tools
 
 clean-cargo:
 		cargo clean
@@ -84,3 +89,6 @@ clean-wasi-sdk:
 
 clean-mediator:
 	cd mediator && mvn clean
+
+clean-cli-tools:
+	cd cli && mvn clean

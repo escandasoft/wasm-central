@@ -40,11 +40,14 @@ public class InvokeCommand implements Callable<Integer> {
         } else {
             builder.setBody(ByteString.copyFromUtf8(payload));
         }
+        var before = System.currentTimeMillis();
         var reply = executor.get().execute(builder.build())
                 .await()
                 .atMost(Duration.ofMinutes(2));
         System.out.println("Response code => " + reply.getCode());
         System.out.println("Response => " + reply.getBody());
+        var delta = System.currentTimeMillis() - before;
+        System.out.println("Invocation roundtrip took => " + delta + "ms");
         return 0;
     }
 }

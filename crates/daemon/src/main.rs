@@ -68,6 +68,7 @@ impl Executor for Impl {
                 Ok(output) => {
                     println!("Executed function");
                     Ok(Response::new(ExecuteReply {
+                        code: 0,
                         body: output.body
                     }))
                 }
@@ -78,6 +79,7 @@ impl Executor for Impl {
             }
         } else {
             Ok(Response::new(ExecuteReply {
+                code: 1,
                 body: "Couldn't execute fn".to_string().as_bytes().to_vec()
             }))
         }
